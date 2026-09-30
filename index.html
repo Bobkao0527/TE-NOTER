@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TE-NOTER | 極致高密度簡報大抄排版器</title>
+  <meta name="description" content="專為考試紙本大抄設計的問卷式流程排版工具。支援 PDF 本地解析、自動比例排版、AI 單字表、考點查對表、外部筆記整合與極限微縮 A4 導出。">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- 字型引入 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap"
+    rel="stylesheet">
+
+  <!-- 樣式表 -->
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/print.css">
+
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+
+  <!-- PDF-Lib CDN (純前端標準向量 PDF 生成引擎，保留 100% 原始畫質並防止瀏覽器列印裁切) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+</head>
+
+<body class="theme-dark print-orientation-portrait">
+  <!-- 頂部導覽列 -->
+  <header class="app-header no-print">
+    <div class="header-left">
+      <div class="brand-logo">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="3" y1="9" x2="21" y2="9"></line>
+          <line x1="3" y1="15" x2="21" y2="15"></line>
+          <line x1="9" y1="3" x2="9" y2="21"></line>
+          <line x1="15" y1="3" x2="15" y2="21"></line>
+        </svg>
+        <span class="brand-title">TE-NOTER</span>
+        <span class="brand-badge">大抄嚮導</span>
+      </div>
+      <span class="header-tagline">向導式考試大抄製作系統 ‧ 6 步搞定高密度講義</span>
+    </div>
+    <div class="header-right">
+      <div class="privacy-badge" title="檔案完全在瀏覽器本地解析，絕對不上傳伺服器">
+        <span class="pulse-dot"></span>
+        <span class="privacy-text">100% 本地端隱私</span>
+      </div>
+      <button id="btnQuickPrint" class="btn btn-primary btn-sm" title="直接列印當前畫面（⌘P / Ctrl+P）">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        <span>列印 / 存為 PDF</span>
+        <kbd class="kbd-badge">⌘P</kbd>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主工作區：左側問卷步驟內容 + 右側垂直進度條導引 -->
+  <main class="wizard-workspace">
+    <!-- 左側主要問卷步驟容器 -->
+    <div class="wizard-main-container">
+      <div class="wizard-viewport">
+        <!-- ========================================================
+             步驟 1: 匯入檔案
+             ======================================================== -->
+        <section id="step1" class="wizard-step-pane active">
+          <div class="step-header">
+            <span class="step-badge-num">STEP 1</span>
+            <h2 class="step-title">匯入課程簡報 PDF 檔案</h2>
+            <p class="step-desc">請選取或拖曳您要製作紙本大抄的簡報 PDF。支援 150～200+ 頁投影片本地即時解析。</p>
+          </div>
+
+          <div class="step-body-content">
+            <div id="dropZone" class="wizard-drop-zone">
+              <input type="file" id="pdfFileInput" accept="application/pdf" class="file-input-hidden">
+              <div class="drop-zone-content">
+                <div class="upload-icon-circle">
+                  <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </div>
+                <div class="drop-text-primary">點擊或拖曳 PDF 簡報至此</div>
+                <div class="drop-text-sub">支援 4:3 傳統與 16:9 寬螢幕，或任意特殊比例自動分類</div>
+              </div>
+            </div>
+
+            <!-- 已載入檔案狀態卡 -->
+            <div id="fileLoadedCard" class="file-loaded-card hidden">
+              <div class="file-card-icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+              </div>
+              <div class="file-card-details">
+                <span id="loadedFileName" class="file-card-name">lecture.pdf</span>
+                <div class="file-card-meta">
+                  <span id="loadedFilePages" class="meta-tag">0 頁</span>
+                  <span id="loadedFileRatio" class="meta-tag highlight">偵測比例中...</span>
+                  <span id="loadedFileGrid" class="meta-tag success">直式 3×6</span>
+                </div>
+              </div>
+              <button id="btnReupload" class="btn btn-secondary btn-sm" title="更換檔案">更換檔案</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================
+             步驟 2: 預覽自動排版與頁面挑選
+             ======================================================== -->
+        <section id="step2" class="wizard-step-pane">
+          <div class="step-header">
+            <div class="step-header-row">
+              <div>
+                <span class="step-badge-num">STEP 2</span>
+                <h2 class="step-title">自動排版預覽與投影片剔除</h2>
+                <p class="step-desc">系統已依據比例自動適配排版（4:3 套用直式 3×6，16:9 套用直式 3×7）。點擊縮圖可一鍵剔除無用封面與轉場頁！</p>
+              </div>
+              <div class="step-header-actions">
+                <button id="btnSelectAll" class="btn btn-secondary btn-sm">全選</button>
+                <button id="btnDeselectAll" class="btn btn-secondary btn-sm">全清</button>
+                <button id="btnInvertSelect" class="btn btn-secondary btn-sm">反選</button>
+              </div>
+            </div>
+            <div class="step-filter-bar">
+              <span id="step2SummaryText" class="summary-chip">已選取 0 / 0 頁</span>
+              <span id="step2LayoutText" class="summary-chip highlight">直式 3×6 (18張/面)</span>
+              <input type="text" id="slideFilterInput" placeholder="搜尋特定文字篩選卡片..." class="filter-input-sm">
+            </div>
+          </div>
+
+          <div class="step-body-content">
+            <div class="slide-selector-grid" id="slideSelectorGrid">
+              <!-- 縮圖卡片動態生成 -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================
+             步驟 3: AI 英文單字抓取與翻譯單字表
+             ======================================================== -->
+        <section id="step3" class="wizard-step-pane">
+          <div class="step-header">
+            <span class="step-badge-num">STEP 3</span>
+            <h2 class="step-title">是否使用 AI 抓取英文專有名詞與單字表？</h2>
+            <p class="step-desc">專有名詞太難背？可自動從投影片萃取英文專有名詞、縮寫並整理成高密度大抄單字附錄。</p>
+          </div>
+
+          <div class="step-body-content">
+            <!-- 詢問開關卡片 -->
+            <div class="survey-option-card">
+              <div class="option-header">
+                <div class="option-icon">📖</div>
+                <div class="option-text">
+                  <h3>啟用大抄單字與專有名詞附錄表</h3>
+                  <p>印在簡報大抄後方，考場上快速查閱縮寫名詞（如 TCP, FIFO, AMAT, BFS, RSA 等）與中文釋義。</p>
+                </div>
+                <label class="switch-wrapper">
+                  <input type="checkbox" id="chkEnableVocab" checked>
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <!-- 單字設定子面板 -->
+              <div id="vocabConfigArea" class="option-sub-area">
+                <div class="ai-mode-tabs">
+                  <span class="ai-mode-label">抓取模式：</span>
+                  <button type="button" class="btn-toggle active" data-vmode="prompt">📋 複製 Prompt 給外部 AI (推薦 ⭐)</button>
+                  <button type="button" class="btn-toggle" data-vmode="local">⚡ 規則快速萃取 (免連網)</button>
+                </div>
+
+                <div id="vocabLocalArea" class="vocab-preview-box hidden">
+                  <div class="vocab-box-header">
+                    <span>已自動識別 <strong id="vocabCount">0</strong> 個核心詞彙 (可直接於下方點選編輯/刪除)</span>
+                    <button id="btnRefreshVocab" class="btn btn-secondary btn-xs">重新整理詞彙</button>
+                  </div>
+                  <div class="vocab-tags-flow" id="vocabTagsFlow">
+                    <!-- 單字標籤動態注入 -->
+                  </div>
+                </div>
+
+                <div id="vocabPromptArea" class="vocab-prompt-box">
+                  <p class="prompt-hint">一鍵複製<strong>整份簡報所有逐頁文字</strong>與專業 Prompt，直接貼給外部 AI (ChatGPT / Claude / Gemini)，請它自主研讀全文、挖掘專業名詞(英美對照)並提煉每頁考點，再將回覆整篇貼回下方：</p>
+                  <button id="btnCopyVocabPrompt" class="btn btn-secondary btn-sm" style="margin-bottom:0.75rem;">📋
+                    複製全簡報文字與深度分析 Prompt (自帶全文脈絡)</button>
+                  <textarea id="vocabPasteInput" rows="5" class="custom-textarea"
+                    placeholder="請將外部 AI 回覆之內容直接貼於此處（支援自動同時辨識並更新【單字表附錄】與【逐頁考點目錄】）..."></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================
+             步驟 4: 逐頁重點抓取與考點速查表
+             ======================================================== -->
+        <section id="step4" class="wizard-step-pane">
+          <div class="step-header">
+            <span class="step-badge-num">STEP 4</span>
+            <h2 class="step-title">是否使用 AI 進行逐頁考點抓取，製作快速查對表？</h2>
+            <p class="step-desc">在大抄最後一頁製作「頁碼 ↔ 重點主題/公式」速查索引，考場上只要看目錄就能秒翻到目標投影片！</p>
+          </div>
+
+          <div class="step-body-content">
+            <div class="survey-option-card">
+              <div class="option-header">
+                <div class="option-icon">⚡</div>
+                <div class="option-text">
+                  <h3>啟用逐頁考點速查目錄 (Quick Reference Table)</h3>
+                  <p>以 4～5 欄極限微縮文字，列出「#1 標題、#2 公式、#3 定理...」，翻找考題速度提升 300%！</p>
+                </div>
+                <label class="switch-wrapper">
+                  <input type="checkbox" id="chkEnableQuickRef" checked>
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <div id="quickRefConfigArea" class="option-sub-area">
+                <div class="quick-ref-preview-table" id="quickRefPreviewContainer">
+                  <div class="table-loading-hint">正在從每頁投影片提取標題與重點...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================
+             步驟 5: 貼入外部 AI 筆記內容
+             ======================================================== -->
+        <section id="step5" class="wizard-step-pane">
+          <div class="step-header">
+            <span class="step-badge-num">STEP 5</span>
+            <h2 class="step-title">是否有請其他 AI 整理的筆記需要一併印出？</h2>
+            <p class="step-desc">若您已經在 ChatGPT、Claude 或筆記軟體整理了重點整理、公式推導或歷屆試題，可直接複製貼上，系統將自動為您排入高密度大抄末頁！</p>
+          </div>
+
+          <div class="step-body-content">
+            <div class="survey-option-card">
+              <div class="option-header">
+                <div class="option-icon">📝</div>
+                <div class="option-text">
+                  <h3>貼入自訂筆記 / 外部 AI 重點文字</h3>
+                  <p>支援 Markdown、文字段落、公式代碼，自動排版為 3 欄式極致省紙印刷版面。</p>
+                </div>
+                <label class="switch-wrapper">
+                  <input type="checkbox" id="chkEnableCustomNotes">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+
+              <div id="customNotesArea" class="option-sub-area hidden">
+                <textarea id="customNotesInput" rows="10" class="custom-textarea" placeholder="在此處貼上筆記文字或 Markdown 內容...
+例如：
+## 必考重點整理
+1. 時間複雜度比較：O(1) < O(log n) < O(n) < O(n log n)
+2. Master Theorem 公式與判斷技巧
+3. TCP 三向交握步驟與狀態變化"></textarea>
+                <div class="textarea-footer">
+                  <span id="customNotesCharCount" class="notes-char-count">共 0 字元 (預估約佔 0 頁 A4)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================================
+             步驟 6: 預覽最終成果與 PDF 導出
+             ======================================================== -->
+        <section id="step6" class="wizard-step-pane">
+          <div class="step-header">
+            <div class="step-header-row">
+              <div>
+                <span class="step-badge-num">STEP 6</span>
+                <h2 class="step-title">預覽最終大抄成果並導出 PDF</h2>
+                <p class="step-desc">您的專屬紙本大抄已組裝完成！包含精選簡報、附錄速查表與自訂筆記，可直接列印或另存為 PDF 檔案。</p>
+              </div>
+              <div class="step-header-actions">
+                <button id="btnExportVectorPdf" class="btn btn-primary btn-md"
+                  title="使用純前端 PDF-lib 向量合成，100% 原始解析度且內建安全邊距，完全防止印表機切邊！">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>✨ 匯出標準高畫質 PDF</span>
+                </button>
+                <button id="btnFinalPrint" class="btn btn-secondary btn-md" title="直接開啟瀏覽器列印對話框（⌘P / Ctrl+P）">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  <span>系統列印</span>
+                  <kbd class="kbd-badge">⌘P</kbd>
+                </button>
+              </div>
+            </div>
+
+            <!-- 列印選項微調條 -->
+            <div class="final-options-strip">
+              <div class="options-strip-left">
+                <label class="custom-chk-sm">
+                  <input type="checkbox" id="chkFinalBadge" checked>
+                  <span>顯示頁碼標籤</span>
+                </label>
+                <label class="custom-chk-sm">
+                  <input type="checkbox" id="chkFinalBorder" checked>
+                  <span>裁切外框線</span>
+                </label>
+                <label class="custom-chk-sm">
+                  <input type="checkbox" id="chkFinalInkSaver">
+                  <span>黑白省墨高對比</span>
+                </label>
+              </div>
+              <div class="options-strip-right">
+                <label for="finalZoomSlider" class="zoom-label">A4 預覽縮放:</label>
+                <input type="range" id="finalZoomSlider" min="0.4" max="1.2" step="0.05" value="0.75"
+                  class="slider-scale">
+                <span id="finalZoomVal" class="zoom-val-badge">75%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 獨立可捲動之 PDF 列印預覽專用視窗 -->
+          <div class="step-body-content pdf-dedicated-viewport" id="pdfScrollContainer">
+            <!-- 實體列印容器 -->
+            <div class="print-pages-container" id="finalPrintContainer">
+              <!-- 實體 A4 頁面節點動態生成 -->
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 底部問卷導航工具列 (上一步、下一步、完成) -->
+      <footer class="wizard-footer-nav no-print">
+        <button id="btnPrevStep" class="btn btn-secondary" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          上一步
+        </button>
+
+        <div class="step-status-indicator">
+          <span id="footerStepIndicator">步驟 1 / 6：匯入檔案</span>
+        </div>
+
+        <button id="btnNextStep" class="btn btn-primary">
+          <span>下一步</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </footer>
+    </div>
+
+    <!-- 右側垂直進度條導航欄 (Right Step Progress Timeline) -->
+    <aside class="wizard-timeline-sidebar no-print">
+      <div class="sidebar-header">
+        <h3 class="timeline-title">📋 大抄製作流程</h3>
+        <span class="timeline-sub">完成 6 個步驟即可開考</span>
+      </div>
+
+      <!-- 垂直進度條清單 -->
+      <nav class="timeline-steps-list">
+        <div class="timeline-item active" data-step="1">
+          <div class="timeline-marker">
+            <span class="marker-dot">1</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">匯入檔案</span>
+            <span class="timeline-step-sub" id="timelineStep1Sub">尚未選取 PDF</span>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-step="2">
+          <div class="timeline-marker">
+            <span class="marker-dot">2</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">預覽自動排版</span>
+            <span class="timeline-step-sub" id="timelineStep2Sub">4:3 或 16:9 自動適配</span>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-step="3">
+          <div class="timeline-marker">
+            <span class="marker-dot">3</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">AI 單字翻譯表</span>
+            <span class="timeline-step-sub" id="timelineStep3Sub">專有名詞速查</span>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-step="4">
+          <div class="timeline-marker">
+            <span class="marker-dot">4</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">逐頁考點查表</span>
+            <span class="timeline-step-sub" id="timelineStep4Sub">考場秒翻定位</span>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-step="5">
+          <div class="timeline-marker">
+            <span class="marker-dot">5</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">外部筆記整合</span>
+            <span class="timeline-step-sub" id="timelineStep5Sub">貼入 ChatGPT 筆記</span>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-step="6">
+          <div class="timeline-marker">
+            <span class="marker-dot">6</span>
+          </div>
+          <div class="timeline-content">
+            <span class="timeline-step-title">最終成果與導出</span>
+            <span class="timeline-step-sub" id="timelineStep6Sub">A4 預覽與列印</span>
+          </div>
+        </div>
+      </nav>
+
+      <!-- 即時效益統計小卡 -->
+      <div class="timeline-stats-card">
+        <div class="stats-card-header">
+          <h4 class="stats-card-title">📊 排版節省效益</h4>
+          <span id="sideStatSavingsBadge" class="savings-badge">省紙 0%</span>
+        </div>
+        <div class="stat-mini-row">
+          <span class="stat-mini-label">原始簡報</span>
+          <span id="sideStatSlides" class="stat-mini-val">0 頁</span>
+        </div>
+        <div class="stat-mini-row">
+          <span class="stat-mini-label">大抄紙張</span>
+          <span id="sideStatPapers" class="stat-mini-val highlight">0 面 (0 張雙面)</span>
+        </div>
+        <div class="stat-mini-row">
+          <span class="stat-mini-label">排版規格</span>
+          <span id="sideStatLayout" class="stat-mini-val">直式 3×6</span>
+        </div>
+        <div class="stat-progress-section" style="margin-top: 0.65rem;">
+          <div class="stat-progress-bar">
+            <div class="stat-progress-fill" id="sideStatFillBar" style="width: 0%;"></div>
+          </div>
+          <div class="stat-progress-desc">
+            <span class="progress-desc-label">大抄厚度壓縮效益</span>
+            <span id="sideStatPercentText" class="progress-desc-val">省紙 0%</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 狀態提示列 -->
+  <div id="toastNotification" class="toast-notification hidden"></div>
+
+  <!-- 應用腳本 -->
+  <script type="module" src="js/app.js"></script>
+</body>
+
+</html>

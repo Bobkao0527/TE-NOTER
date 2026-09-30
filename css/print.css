@@ -1,0 +1,248 @@
+/* ==========================================================================
+   TE-NOTER - 專屬 A4 列印樣式表 (print.css)
+   確保真實印表機與匯出 PDF 時 100% 精準對齊、零多餘空白頁與銳利印刷
+   ========================================================================== */
+
+/* 核心設定：精確定義 A4 紙張尺寸並強制移除瀏覽器預設頁首頁尾與邊距 */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /* 隱藏所有操作介面、導覽列與非最終步驟 */
+  .no-print,
+  .app-header,
+  .wizard-timeline-sidebar,
+  .wizard-footer-nav,
+  .step-header,
+  .final-options-strip,
+  .page-indicator-badge,
+  .toast-notification,
+  #step1,
+  #step2,
+  #step3,
+  #step4,
+  #step5 {
+    display: none !important;
+  }
+
+  /* 重設主體與容器為白底列印環境，消除任何會造成溢出的外距與內距 */
+  html, body {
+    width: 210mm !important;
+    height: auto !important;
+    min-height: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .wizard-workspace,
+  .wizard-main-container,
+  .wizard-viewport,
+  .step-body-content,
+  .pdf-dedicated-viewport,
+  #step6 {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .print-pages-container {
+    display: block !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    zoom: 1 !important;
+  }
+
+  /* 單頁包裹容器：由外層統一負責分頁控制，防止單頁被截斷 */
+  .print-page-wrapper {
+    position: relative !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  /* 最後一頁禁止再次分頁，杜絕末端多餘空白頁 */
+  .print-page-wrapper:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  /* 直向 A4 實體列印規格：內層元素一律 break-after: auto，並保留 4mm 安全邊距防止印表機遮邊 */
+  .a4-sheet.print-page {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: auto !important;
+    page-break-after: auto !important;
+    transform: none !important;
+  }
+
+  /* 實體網格容器滿版對齊 */
+  .real-print-grid {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    display: grid !important;
+  }
+
+  /* 投影片單張格線細緻化 */
+  .print-slide-item.bordered {
+    border: 0.5pt solid #94a3b8 !important;
+  }
+
+  .print-slide-badge {
+    background: #000000 !important;
+    color: #ffffff !important;
+    font-size: 8pt !important;
+    padding: 1px 3px !important;
+    border-radius: 1px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 黑白高對比省墨印刷強化 */
+  .ink-saver-active .print-slide-item img {
+    filter: grayscale(100%) contrast(160%) brightness(105%) !important;
+  }
+
+  /* 大抄末頁索引附錄頁列印專屬排版 */
+  .appendix-print-sheet {
+    box-sizing: border-box !important;
+    font-size: 8pt !important;
+    color: #000000 !important;
+    overflow: hidden !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    padding: 8mm 10mm !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .appendix-print-sheet h2 {
+    font-size: 11pt !important;
+    margin-bottom: 2mm !important;
+    border-bottom: 1.5pt solid #000 !important;
+    padding-bottom: 1.5mm !important;
+  }
+
+  .appendix-print-sheet .appendix-columns-4 {
+    background: transparent !important;
+    color: #000000 !important;
+    column-count: 4 !important;
+    column-gap: 5mm !important;
+    column-rule: 0.5pt solid #ccc !important;
+    padding: 0 !important;
+    height: 255mm !important;
+    max-height: 255mm !important;
+    overflow: hidden !important;
+    font-size: 6.8pt !important;
+    line-height: 1.35 !important;
+  }
+
+  .appendix-print-sheet .appendix-columns-2 {
+    background: transparent !important;
+    color: #000000 !important;
+    column-count: 2 !important;
+    column-gap: 8mm !important;
+    column-rule: 0.5pt solid #ccc !important;
+    padding: 0 !important;
+    height: 255mm !important;
+    max-height: 255mm !important;
+    overflow: hidden !important;
+    font-size: 7.5pt !important;
+    line-height: 1.4 !important;
+  }
+
+  .appendix-print-sheet .appendix-columns-3 {
+    background: transparent !important;
+    color: #000000 !important;
+    column-count: 3 !important;
+    column-gap: 6mm !important;
+    column-rule: 0.5pt solid #ccc !important;
+    padding: 0 !important;
+    height: 255mm !important;
+    max-height: 255mm !important;
+    overflow: hidden !important;
+    font-size: 7.5pt !important;
+    line-height: 1.45 !important;
+  }
+
+  .appendix-print-sheet .appendix-quickref-item {
+    border-bottom: 0.5pt dotted #999 !important;
+    break-inside: avoid !important;
+    padding: 2.2px 0 !important;
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+  }
+
+  .appendix-print-sheet .quickref-num {
+    font-weight: bold !important;
+    font-family: monospace !important;
+    color: #000000 !important;
+    min-width: 28px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .appendix-print-sheet .quickref-title {
+    color: #000000 !important;
+    flex: 1 !important;
+    word-break: break-word !important;
+    line-height: 1.35 !important;
+  }
+
+  .appendix-print-sheet .appendix-term-item {
+    border-bottom: 0.5pt dotted #999 !important;
+    break-inside: avoid !important;
+    padding: 2.2px 0 !important;
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 4px !important;
+    flex-wrap: wrap !important;
+    line-height: 1.35 !important;
+  }
+
+  .appendix-print-sheet .item-page-tag {
+    font-weight: bold !important;
+    font-family: monospace !important;
+    flex-shrink: 0 !important;
+    font-size: 6pt !important;
+    color: #475569 !important;
+  }
+
+  .appendix-print-sheet .item-title-text {
+    word-break: break-word !important;
+    white-space: normal !important;
+    flex: 1 !important;
+    color: #000000 !important;
+  }
+}

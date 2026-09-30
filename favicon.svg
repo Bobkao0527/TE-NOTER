@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+  </defs>
+  <!-- 背景圓角方塊 -->
+  <rect width="64" height="64" rx="14" fill="#0f1117" />
+  <rect x="2" y="2" width="60" height="60" rx="12" stroke="url(#grad)" stroke-width="2.5" />
+  
+  <!-- 網格與大抄結構示意 -->
+  <rect x="12" y="12" width="10" height="8" rx="2" fill="url(#grad)" />
+  <rect x="27" y="12" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+  <rect x="42" y="12" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+  
+  <rect x="12" y="25" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+  <rect x="27" y="25" width="10" height="8" rx="2" fill="url(#grad)" />
+  <rect x="42" y="25" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+
+  <rect x="12" y="38" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+  <rect x="27" y="38" width="10" height="8" rx="2" fill="url(#grad)" opacity="0.85" />
+  <rect x="42" y="38" width="10" height="8" rx="2" fill="url(#grad)" />
+
+  <!-- 底部筆記線條 -->
+  <line x1="14" y1="52" x2="50" y2="52" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" />
+</svg>
