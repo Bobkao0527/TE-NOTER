@@ -450,19 +450,23 @@ export class LayoutEngine {
           const numStr = numEl ? numEl.textContent.trim() : `#${idx + 1}`;
           const titleStr = titleEl ? titleEl.textContent.trim() : item.textContent.trim();
 
-          // 頁碼加粗藍色
-          ctx.fillStyle = '#1e40af';
-          ctx.font = 'bold 30px "JetBrains Mono", monospace';
+          // 頁碼 (若是主題區間，使用加粗黑色強調)
+          const isSpan = numStr.includes('-');
+          ctx.fillStyle = isSpan ? '#0f172a' : '#1e40af';
+          ctx.font = 'bold 26px "JetBrains Mono", monospace';
           ctx.fillText(numStr, x, y + 36);
 
-          // 考點標題 (完整呈現)
-          ctx.fillStyle = '#0f172a';
-          ctx.font = '500 26px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+          const numWidth = ctx.measureText(numStr).width;
+          const titleOffsetX = Math.max(125, numWidth + 15);
 
-          const maxTitleWidth = colWidth - 110;
+          // 考點標題 (完整呈現，若為主題則加粗)
+          ctx.fillStyle = isSpan ? '#000000' : '#1e293b';
+          ctx.font = isSpan ? 'bold 25px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif' : '500 24px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+
+          const maxTitleWidth = colWidth - titleOffsetX - 10;
           let drawTitle = titleStr;
           if (ctx.measureText(drawTitle).width > maxTitleWidth) {
-            ctx.font = '500 23px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+            ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
             if (ctx.measureText(drawTitle).width > maxTitleWidth) {
               while (drawTitle.length > 0 && ctx.measureText(drawTitle + '...').width > maxTitleWidth) {
                 drawTitle = drawTitle.slice(0, -1);
@@ -470,7 +474,7 @@ export class LayoutEngine {
               drawTitle += '...';
             }
           }
-          ctx.fillText(drawTitle, x + 95, y + 36);
+          ctx.fillText(drawTitle, x + titleOffsetX, y + 36);
 
           // 底部細點線
           ctx.strokeStyle = '#cbd5e1';
@@ -539,50 +543,94 @@ export class LayoutEngine {
         });
 
       } else {
-        // === 外部自訂筆記 (3 欄排版) ===
-        const paras = sheet.querySelectorAll('.appendix-columns-3 > div');
-        const colWidth = 720;
-        const colStartX = [110, 875, 1640];
-        const startY = 240;
-        let curCol = 0;
-        let curY = startY;
+        // === 外部自訂筆記 (支援 Markdown & KaTeX 公式 3 欄排版) ===
+        const mdContainer = sheet.querySelector('.appendix-markdown-content');
+        let renderedViaSvg = false;
 
-        paras.forEach(p => {
-          const isH1 = p.querySelector('strong[style*="font-size:10pt"]');
-          const isH2 = p.querySelector('strong[style*="font-size:9pt"]');
-          const text = p.textContent.trim();
-
-          ctx.font = isH1 ? 'bold 36px sans-serif' : (isH2 ? 'bold 30px sans-serif' : '400 26px sans-serif');
-          ctx.fillStyle = isH1 || isH2 ? '#000000' : '#1e293b';
-
-          const words = text.split('');
-          let line = '';
-          const pLines = [];
-          for (let char of words) {
-            if (ctx.measureText(line + char).width < colWidth) {
-              line += char;
-            } else {
-              pLines.push(line);
-              line = char;
-            }
-          }
-          if (line) pLines.push(line);
-
-          const blockHeight = pLines.length * 36 + (isH1 || isH2 ? 20 : 12);
-          if (curY + blockHeight > height - 120) {
-            curCol++;
-            curY = startY;
-          }
-
-          if (curCol < 3) {
-            const x = colStartX[curCol];
-            pLines.forEach(l => {
-              ctx.fillText(l, x, curY + 28);
-              curY += 36;
+        if (mdContainer && window.Blob && window.URL) {
+          try {
+            // 優先嘗試透過 SVG foreignObject 渲染出最高還原度的 Markdown 與 KaTeX 公式
+            const serialized = new XMLSerializer().serializeToString(sheet);
+            const svgString = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+                <foreignObject width="100%" height="100%">
+                  <div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff; width:${width}px; height:${height}px; transform: scale(${width / (sheet.offsetWidth || 794)}); transform-origin: 0 0;">
+                    ${serialized}
+                  </div>
+                </foreignObject>
+              </svg>
+            `;
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+              img.onload = () => {
+                ctx.drawImage(img, 0, 0, width, height);
+                URL.revokeObjectURL(svgUrl);
+                renderedViaSvg = true;
+                resolve();
+              };
+              img.onerror = () => {
+                URL.revokeObjectURL(svgUrl);
+                reject();
+              };
+              img.src = svgUrl;
             });
-            curY += (isH1 || isH2 ? 16 : 8);
+          } catch (e) {
+            renderedViaSvg = false;
           }
-        });
+        }
+
+        // 若 SVG 渲染未執行或因瀏覽器安全性限制失敗，使用 Canvas 遍歷各節點進行高可靠度排版繪製
+        if (!renderedViaSvg) {
+          const blocks = sheet.querySelectorAll('.appendix-markdown-content > *') || sheet.querySelectorAll('.appendix-columns-3 > div');
+          const colWidth = 720;
+          const colStartX = [110, 875, 1640];
+          const startY = 240;
+          let curCol = 0;
+          let curY = startY;
+
+          blocks.forEach(p => {
+            const tag = p.tagName ? p.tagName.toLowerCase() : '';
+            const isH1 = tag === 'h1' || p.querySelector('strong[style*="font-size:10pt"]');
+            const isH2 = tag === 'h2' || p.querySelector('strong[style*="font-size:9pt"]');
+            const isH3 = tag === 'h3';
+            const isPre = tag === 'pre';
+            const text = p.textContent.trim();
+
+            ctx.font = isH1 ? 'bold 36px sans-serif' : (isH2 ? 'bold 30px sans-serif' : (isH3 ? 'bold 26px sans-serif' : (isPre ? '400 22px monospace' : '400 24px sans-serif')));
+            ctx.fillStyle = isH1 || isH2 ? '#000000' : (isPre ? '#0f172a' : '#1e293b');
+
+            const words = text.split('');
+            let line = '';
+            const pLines = [];
+            for (let char of words) {
+              if (ctx.measureText(line + char).width < colWidth) {
+                line += char;
+              } else {
+                pLines.push(line);
+                line = char;
+              }
+            }
+            if (line) pLines.push(line);
+
+            const lineHeight = isPre ? 30 : 34;
+            const blockHeight = pLines.length * lineHeight + (isH1 || isH2 ? 22 : 12);
+            if (curY + blockHeight > height - 120) {
+              curCol++;
+              curY = startY;
+            }
+
+            if (curCol < 3) {
+              const x = colStartX[curCol];
+              pLines.forEach(l => {
+                ctx.fillText(l, x, curY + 24);
+                curY += lineHeight;
+              });
+              curY += (isH1 || isH2 ? 16 : 8);
+            }
+          });
+        }
       }
 
       // 轉換為 PNG 二進位陣列

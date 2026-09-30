@@ -209,8 +209,14 @@
     font-weight: bold !important;
     font-family: monospace !important;
     color: #000000 !important;
-    min-width: 28px !important;
+    min-width: 36px !important;
     flex-shrink: 0 !important;
+    font-size: 7.2pt !important;
+  }
+
+  .appendix-print-sheet .quickref-span-item {
+    background: #f1f5f9 !important;
+    border-bottom: 0.8pt solid #000000 !important;
   }
 
   .appendix-print-sheet .quickref-title {
@@ -218,6 +224,18 @@
     flex: 1 !important;
     word-break: break-word !important;
     line-height: 1.35 !important;
+  }
+
+  .appendix-print-sheet .quickref-tag {
+    display: inline-block !important;
+    font-size: 6pt !important;
+    font-weight: bold !important;
+    padding: 0.2px 2.5px !important;
+    border-radius: 2px !important;
+    margin-right: 3px !important;
+    border: 0.5pt solid #000000 !important;
+    color: #000000 !important;
+    background: transparent !important;
   }
 
   .appendix-print-sheet .appendix-term-item {
@@ -245,4 +263,52 @@
     flex: 1 !important;
     color: #000000 !important;
   }
+
+  /* 自訂筆記 Markdown & KaTeX 列印樣式 */
+  .appendix-print-sheet .appendix-markdown-content {
+    background: transparent !important;
+    color: #000000 !important;
+    column-count: 3 !important;
+    column-gap: 5.5mm !important;
+    column-rule: 0.5pt solid #cbd5e1 !important;
+    padding: 0 !important;
+    height: 255mm !important;
+    max-height: 255mm !important;
+    overflow: hidden !important;
+    font-size: 7.2pt !important;
+    line-height: 1.38 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content h1,
+  .appendix-print-sheet .appendix-markdown-content h2,
+  .appendix-print-sheet .appendix-markdown-content h3,
+  .appendix-print-sheet .appendix-markdown-content h4 {
+    color: #000000 !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content pre,
+  .appendix-print-sheet .appendix-markdown-content code {
+    background: #f1f5f9 !important;
+    color: #000000 !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content table,
+  .appendix-print-sheet .appendix-markdown-content th,
+  .appendix-print-sheet .appendix-markdown-content td {
+    border-color: #94a3b8 !important;
+    color: #000000 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content th {
+    background: #e2e8f0 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content blockquote {
+    border-left-color: #000000 !important;
+    color: #1e293b !important;
+  }
 }
+

@@ -29,6 +29,14 @@
 
   <!-- PDF-Lib CDN (純前端標準向量 PDF 生成引擎，保留 100% 原始畫質並防止瀏覽器列印裁切) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+  <!-- Marked.js (完整支援 GitHub 語法 Markdown 解析) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+
+  <!-- KaTeX CDN (學術級 LaTeX 數學公式排版引擎，支援行內 $...$ 與獨立區塊 $$...$$) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 </head>
 
 <body class="theme-dark print-orientation-portrait">
@@ -46,7 +54,7 @@
         <span class="brand-title">TE-NOTER</span>
         <span class="brand-badge">大抄嚮導</span>
       </div>
-      <span class="header-tagline">向導式考試大抄製作系統 ‧ 6 步搞定高密度講義</span>
+      <span class="header-tagline">考試紙本資料製作系統</span>
     </div>
     <div class="header-right">
       <div class="privacy-badge" title="檔案完全在瀏覽器本地解析，絕對不上傳伺服器">
@@ -77,7 +85,7 @@
           <div class="step-header">
             <span class="step-badge-num">STEP 1</span>
             <h2 class="step-title">匯入課程簡報 PDF 檔案</h2>
-            <p class="step-desc">請選取或拖曳您要製作紙本大抄的簡報 PDF。支援 150～200+ 頁投影片本地即時解析。</p>
+            <p class="step-desc">請選取或拖曳您要製作紙本資料的簡報 PDF。支援 150～200+ 頁投影片本地即時解析。</p>
           </div>
 
           <div class="step-body-content">
@@ -155,7 +163,7 @@
           <div class="step-header">
             <span class="step-badge-num">STEP 3</span>
             <h2 class="step-title">是否使用 AI 抓取英文專有名詞與單字表？</h2>
-            <p class="step-desc">專有名詞太難背？可自動從投影片萃取英文專有名詞、縮寫並整理成高密度大抄單字附錄。</p>
+            <p class="step-desc">專有名詞太難背？可自動從投影片萃取英文專有名詞、縮寫並整理成高密度單字附錄。</p>
           </div>
 
           <div class="step-body-content">
@@ -164,8 +172,8 @@
               <div class="option-header">
                 <div class="option-icon">📖</div>
                 <div class="option-text">
-                  <h3>啟用大抄單字與專有名詞附錄表</h3>
-                  <p>印在簡報大抄後方，考場上快速查閱縮寫名詞（如 TCP, FIFO, AMAT, BFS, RSA 等）與中文釋義。</p>
+                  <h3>啟用單字與專有名詞附錄表</h3>
+                  <p>印在簡報後方，考場上快速查閱縮寫名詞（如 TCP, FIFO, AMAT, BFS, RSA 等）與中文釋義。</p>
                 </div>
                 <label class="switch-wrapper">
                   <input type="checkbox" id="chkEnableVocab" checked>
@@ -177,7 +185,8 @@
               <div id="vocabConfigArea" class="option-sub-area">
                 <div class="ai-mode-tabs">
                   <span class="ai-mode-label">抓取模式：</span>
-                  <button type="button" class="btn-toggle active" data-vmode="prompt">📋 複製 Prompt 給外部 AI (推薦 ⭐)</button>
+                  <button type="button" class="btn-toggle active" data-vmode="prompt">📋 複製 Prompt 給外部 AI (推薦
+                    ⭐)</button>
                   <button type="button" class="btn-toggle" data-vmode="local">⚡ 規則快速萃取 (免連網)</button>
                 </div>
 
@@ -192,9 +201,25 @@
                 </div>
 
                 <div id="vocabPromptArea" class="vocab-prompt-box">
-                  <p class="prompt-hint">一鍵複製<strong>整份簡報所有逐頁文字</strong>與專業 Prompt，直接貼給外部 AI (ChatGPT / Claude / Gemini)，請它自主研讀全文、挖掘專業名詞(英美對照)並提煉每頁考點，再將回覆整篇貼回下方：</p>
-                  <button id="btnCopyVocabPrompt" class="btn btn-secondary btn-sm" style="margin-bottom:0.75rem;">📋
-                    複製全簡報文字與深度分析 Prompt (自帶全文脈絡)</button>
+                  <div class="prompt-box-header">
+                    <span class="prompt-badge">⚡ 外部 AI 協同分析 (推薦)</span>
+                    <p class="prompt-hint">一鍵複製<strong>整份簡報所有逐頁文字</strong>與深度分析 Prompt，直接貼給外部 AI (ChatGPT / Claude /
+                      Gemini)，請它研讀全文並提煉每頁考點與專有名詞，再將回覆整篇貼回下方：</p>
+                  </div>
+                  <button type="button" id="btnCopyVocabPrompt" class="btn-copy-hero" title="點擊一鍵複製全簡報文字與分析 Prompt">
+                    <div class="btn-copy-icon">
+                      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                        stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </div>
+                    <div class="btn-copy-content">
+                      <span class="btn-copy-main">📋 一鍵複製全簡報文字 ＋ 深度分析 Prompt</span>
+                      <span class="btn-copy-sub">已自動整合全份簡報逐頁文字脈絡・直接貼給 ChatGPT / Claude / Gemini 即可自動整理</span>
+                    </div>
+                    <span class="btn-copy-badge">點擊複製 ⚡</span>
+                  </button>
                   <textarea id="vocabPasteInput" rows="5" class="custom-textarea"
                     placeholder="請將外部 AI 回覆之內容直接貼於此處（支援自動同時辨識並更新【單字表附錄】與【逐頁考點目錄】）..."></textarea>
                 </div>
@@ -209,8 +234,8 @@
         <section id="step4" class="wizard-step-pane">
           <div class="step-header">
             <span class="step-badge-num">STEP 4</span>
-            <h2 class="step-title">是否使用 AI 進行逐頁考點抓取，製作快速查對表？</h2>
-            <p class="step-desc">在大抄最後一頁製作「頁碼 ↔ 重點主題/公式」速查索引，考場上只要看目錄就能秒翻到目標投影片！</p>
+            <h2 class="step-title">是否啟用「章節速查與關鍵考點目錄」？</h2>
+            <p class="step-desc">在最後一頁製作「章節跨度範圍 (如 P.1-8) ＋ 核心必考頁 (如 [公式] P.14)」速查索引，考場上只要看目錄就能秒翻到目標投影片！</p>
           </div>
 
           <div class="step-body-content">
@@ -218,8 +243,8 @@
               <div class="option-header">
                 <div class="option-icon">⚡</div>
                 <div class="option-text">
-                  <h3>啟用逐頁考點速查目錄 (Quick Reference Table)</h3>
-                  <p>以 4～5 欄極限微縮文字，列出「#1 標題、#2 公式、#3 定理...」，翻找考題速度提升 300%！</p>
+                  <h3>啟用章節速查與關鍵考點目錄 (Quick Reference Table)</h3>
+                  <p>以 3 欄式高密度排版，整合「章節範圍 (P.1-8)」與「必考標籤 ([公式]、[比較]、[圖解])」，翻找考題速度提升 300%！</p>
                 </div>
                 <label class="switch-wrapper">
                   <input type="checkbox" id="chkEnableQuickRef" checked>
@@ -243,7 +268,7 @@
           <div class="step-header">
             <span class="step-badge-num">STEP 5</span>
             <h2 class="step-title">是否有請其他 AI 整理的筆記需要一併印出？</h2>
-            <p class="step-desc">若您已經在 ChatGPT、Claude 或筆記軟體整理了重點整理、公式推導或歷屆試題，可直接複製貼上，系統將自動為您排入高密度大抄末頁！</p>
+            <p class="step-desc">若您已經在 ChatGPT、Claude 或筆記軟體整理了重點整理、公式推導或歷屆試題，可直接複製貼上，系統將自動為您排入高密度紙本資料末頁！</p>
           </div>
 
           <div class="step-body-content">
@@ -251,8 +276,10 @@
               <div class="option-header">
                 <div class="option-icon">📝</div>
                 <div class="option-text">
-                  <h3>貼入自訂筆記 / 外部 AI 重點文字</h3>
-                  <p>支援 Markdown、文字段落、公式代碼，自動排版為 3 欄式極致省紙印刷版面。</p>
+                  <h3>貼入自訂筆記 / 外部 AI 重點文字 (支援 Markdown & LaTeX 公式)</h3>
+                  <p>完整支援 GitHub Markdown（標題、清單、粗體、表格、代碼）與 LaTeX 數學公式（行內 <code>$...$</code> 與獨立區塊
+                    <code>$$...$$</code>），自動排版為 3 欄式極致省紙印刷版面。
+                  </p>
                 </div>
                 <label class="switch-wrapper">
                   <input type="checkbox" id="chkEnableCustomNotes">
@@ -261,12 +288,43 @@
               </div>
 
               <div id="customNotesArea" class="option-sub-area hidden">
-                <textarea id="customNotesInput" rows="10" class="custom-textarea" placeholder="在此處貼上筆記文字或 Markdown 內容...
+                <!-- 專屬考前紙本資料 AI Prompt 複製卡片 -->
+                <div class="notes-prompt-box">
+                  <div class="prompt-box-header">
+                    <span class="prompt-badge">⚡ 終極考前紙本資料 AI Prompt (搭配簡報上傳)</span>
+                    <p class="prompt-hint">一鍵複製專為紙本 3 欄深度調優的終極 Prompt，<strong>將此 Prompt 與簡報檔案 (PDF/PPT) 一起拖入丟給外部 AI
+                        (ChatGPT / Claude / Gemini)</strong>，請它研讀簡報圖文並產出精華筆記，再將回覆整篇貼回下方輸入框：</p>
+                  </div>
+
+                  <div class="notes-prompt-actions">
+                    <button type="button" id="btnCopyNotesPrompt" class="btn-copy-hero"
+                      title="點擊一鍵複製考前紙本資料 Prompt，可連同簡報檔案一起傳給 AI">
+                      <div class="btn-copy-icon">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+                          stroke-width="2">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                          <polyline points="14 2 14 8 20 8"></polyline>
+                          <line x1="16" y1="13" x2="8" y2="13"></line>
+                          <line x1="16" y1="17" x2="8" y2="17"></line>
+                          <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                      </div>
+                      <div class="btn-copy-content">
+                        <span class="btn-copy-main">📋 一鍵複製【終極考前大抄 Prompt】（連同簡報檔一起丟給 AI）</span>
+                        <span class="btn-copy-sub">指令已規範 Markdown 結構、LaTeX 嚴謹公式、定義邊界前提、性質對比矩陣與常考避坑指南</span>
+                      </div>
+                      <span class="btn-copy-badge">點擊複製 ⚡</span>
+                    </button>
+                  </div>
+                </div>
+
+                <textarea id="customNotesInput" rows="10" class="custom-textarea" placeholder="在此處貼上筆記文字、Markdown 或包含 LaTeX 數學公式的內容...
 例如：
-## 必考重點整理
-1. 時間複雜度比較：O(1) < O(log n) < O(n) < O(n log n)
-2. Master Theorem 公式與判斷技巧
-3. TCP 三向交握步驟與狀態變化"></textarea>
+## 必考演算法與數學公式推導
+- **時間複雜度比較**：$O(1) < O(\log n) < O(n) < O(n \log n) < O(n^2)$
+- **高斯積分定理**：$$\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}$$
+- **機器學習損失函數**：$L = -\sum_{i} y_i \log(\hat{y}_i)$
+- **關鍵概念**：若矩陣 $A$ 為正定對稱矩陣，則所有特徵值 $\lambda_i > 0$"></textarea>
                 <div class="textarea-footer">
                   <span id="customNotesCharCount" class="notes-char-count">共 0 字元 (預估約佔 0 頁 A4)</span>
                 </div>
@@ -283,8 +341,8 @@
             <div class="step-header-row">
               <div>
                 <span class="step-badge-num">STEP 6</span>
-                <h2 class="step-title">預覽最終大抄成果並導出 PDF</h2>
-                <p class="step-desc">您的專屬紙本大抄已組裝完成！包含精選簡報、附錄速查表與自訂筆記，可直接列印或另存為 PDF 檔案。</p>
+                <h2 class="step-title">預覽最終紙本資料成果並導出 PDF</h2>
+                <p class="step-desc">您的專屬紙本資料已組裝完成！包含精選簡報、附錄速查表與自訂筆記，可直接列印或另存為 PDF 檔案。</p>
               </div>
               <div class="step-header-actions">
                 <button id="btnExportVectorPdf" class="btn btn-primary btn-md"
@@ -345,20 +403,20 @@
 
       <!-- 底部問卷導航工具列 (上一步、下一步、完成) -->
       <footer class="wizard-footer-nav no-print">
-        <button id="btnPrevStep" class="btn btn-secondary" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="btnPrevStep" class="btn btn-secondary btn-wizard-nav" disabled title="回到上一個步驟">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
-          上一步
+          <span>上一步</span>
         </button>
 
         <div class="step-status-indicator">
           <span id="footerStepIndicator">步驟 1 / 6：匯入檔案</span>
         </div>
 
-        <button id="btnNextStep" class="btn btn-primary">
+        <button id="btnNextStep" class="btn btn-primary btn-wizard-nav" title="前往下一個步驟">
           <span>下一步</span>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </button>
@@ -368,7 +426,7 @@
     <!-- 右側垂直進度條導航欄 (Right Step Progress Timeline) -->
     <aside class="wizard-timeline-sidebar no-print">
       <div class="sidebar-header">
-        <h3 class="timeline-title">📋 大抄製作流程</h3>
+        <h3 class="timeline-title">📋 紙本資料製作流程</h3>
         <span class="timeline-sub">完成 6 個步驟即可開考</span>
       </div>
 
@@ -458,7 +516,7 @@
             <div class="stat-progress-fill" id="sideStatFillBar" style="width: 0%;"></div>
           </div>
           <div class="stat-progress-desc">
-            <span class="progress-desc-label">大抄厚度壓縮效益</span>
+            <span class="progress-desc-label">厚度壓縮效益</span>
             <span id="sideStatPercentText" class="progress-desc-val">省紙 0%</span>
           </div>
         </div>

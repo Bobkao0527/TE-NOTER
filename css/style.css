@@ -49,7 +49,7 @@
 
   /* 尺寸指標 */
   --header-height: 60px;
-  --footer-height: 68px;
+  --footer-height: 74px;
   --timeline-width: 320px;
 
   /* 動畫速度 */
@@ -973,11 +973,218 @@ body {
   color: var(--text-muted);
 }
 
-.prompt-hint {
-  font-size: 0.825rem;
-  color: var(--text-secondary);
+/* STEP 3: 複製 Prompt 高度顯眼區塊與 Hero CTA 按鈕 */
+.vocab-prompt-box {
+  background: linear-gradient(180deg, rgba(31, 37, 61, 0.45) 0%, rgba(16, 20, 34, 0.65) 100%);
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-top: 0.75rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.prompt-box-header {
+  margin-bottom: 0.85rem;
+}
+
+.prompt-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  padding: 3px 12px;
+  border-radius: 9999px;
   margin-bottom: 0.5rem;
 }
+
+.prompt-hint {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.prompt-hint strong {
+  color: #ffffff;
+}
+
+/* 醒目的 Hero CTA 複製 Prompt 按鈕 */
+.btn-copy-hero {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1rem 1.4rem;
+  margin: 1.1rem 0 1.25rem 0;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.35) 0%, rgba(124, 58, 237, 0.35) 50%, rgba(217, 70, 239, 0.22) 100%);
+  border: 1.8px solid rgba(147, 197, 253, 0.55);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  text-align: left;
+  box-shadow: 0 4px 22px rgba(99, 102, 241, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-copy-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  transition: 0.5s;
+}
+
+.btn-copy-hero:hover::before {
+  left: 100%;
+}
+
+.btn-copy-hero:hover {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.5) 0%, rgba(124, 58, 237, 0.5) 50%, rgba(217, 70, 239, 0.35) 100%);
+  border-color: rgba(192, 132, 252, 0.95);
+  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.5), inset 0 1px 3px rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-copy-hero:active {
+  transform: translateY(0);
+}
+
+.btn-copy-hero.copied {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(5, 150, 105, 0.5) 100%);
+  border-color: rgba(52, 211, 153, 0.95);
+  box-shadow: 0 6px 26px rgba(16, 185, 129, 0.45);
+}
+
+.btn-copy-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: rgba(99, 102, 241, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  color: #e0e7ff;
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-hero:hover .btn-copy-icon {
+  background: rgba(99, 102, 241, 0.45);
+  color: #ffffff;
+  transform: scale(1.06);
+}
+
+.btn-copy-hero.copied .btn-copy-icon {
+  background: rgba(16, 185, 129, 0.35);
+  border-color: rgba(52, 211, 153, 0.6);
+  color: #a7f3d0;
+}
+
+.btn-copy-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.btn-copy-main {
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.btn-copy-sub {
+  font-size: 0.825rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.btn-copy-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.35);
+  border: 1px solid rgba(165, 180, 252, 0.5);
+  color: #ffffff;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-hero:hover .btn-copy-badge {
+  background: rgba(99, 102, 241, 0.6);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.04);
+}
+
+.btn-copy-hero.copied .btn-copy-badge {
+  background: rgba(16, 185, 129, 0.5);
+  border-color: rgba(110, 231, 183, 0.8);
+  color: #ffffff;
+}
+
+/* STEP 5: 外部筆記 Prompt 專屬卡片 */
+.notes-prompt-box {
+  background: linear-gradient(180deg, rgba(31, 37, 61, 0.5) 0%, rgba(16, 20, 34, 0.7) 100%);
+  border: 1.5px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.notes-prompt-box .prompt-badge {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.notes-prompt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 1.1rem 0 0.5rem 0;
+}
+
+.notes-prompt-actions .btn-copy-hero {
+  margin: 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.28) 0%, rgba(6, 182, 212, 0.28) 50%, rgba(99, 102, 241, 0.2) 100%);
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+.notes-prompt-actions .btn-copy-hero:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.42) 0%, rgba(6, 182, 212, 0.42) 50%, rgba(99, 102, 241, 0.3) 100%);
+  border-color: rgba(110, 231, 183, 0.95);
+  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.42), inset 0 1px 3px rgba(255, 255, 255, 0.35);
+}
+
+.notes-prompt-actions .btn-copy-hero .btn-copy-icon {
+  background: rgba(16, 185, 129, 0.25);
+  color: #a7f3d0;
+}
+
+.notes-prompt-actions .btn-copy-hero:hover .btn-copy-icon {
+  background: rgba(16, 185, 129, 0.45);
+  color: #ffffff;
+}
+
+.notes-prompt-actions .btn-copy-hero .btn-copy-badge {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(110, 231, 183, 0.5);
+  color: #ecfdf5;
+}
+
+
 
 /* STEP 4: 快速查對表預覽 */
 .quick-ref-preview-table {
@@ -1103,23 +1310,96 @@ body {
   height: var(--footer-height);
   min-height: var(--footer-height);
   max-height: var(--footer-height);
-  background: rgba(16, 20, 34, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid var(--border-subtle);
+  background: rgba(16, 20, 34, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2rem;
+  padding: 0 2.2rem;
   flex-shrink: 0;
   z-index: 40;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* 放大上下一步按鈕 (High-Visibility Wizard Nav Buttons) */
+.btn-wizard-nav {
+  min-height: 48px;
+  padding: 0.75rem 2.2rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+  gap: 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.btn-wizard-nav svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+#btnPrevStep.btn-wizard-nav {
+  background: rgba(31, 37, 61, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  color: #f1f5f9;
+}
+
+#btnPrevStep.btn-wizard-nav:hover:not(:disabled) {
+  background: rgba(45, 54, 88, 0.95);
+  border-color: rgba(255, 255, 255, 0.38);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+}
+
+#btnPrevStep.btn-wizard-nav:hover:not(:disabled) svg {
+  transform: translateX(-3px);
+}
+
+#btnPrevStep.btn-wizard-nav:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+#btnNextStep.btn-wizard-nav {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #9333ea 100%);
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.42), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+#btnNextStep.btn-wizard-nav:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 50%, #7e22ce 100%);
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 8px 30px rgba(124, 58, 237, 0.65), inset 0 1px 2px rgba(255, 255, 255, 0.45);
+  transform: translateY(-2px) scale(1.02);
+}
+
+#btnNextStep.btn-wizard-nav:hover:not(:disabled) svg {
+  transform: translateX(3px);
+}
+
+#btnNextStep.btn-wizard-nav:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
 }
 
 .step-status-indicator {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  padding: 0.45rem 1.4rem;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
 }
 
 /* ==========================================================================
@@ -1494,9 +1774,22 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   color: #1e3a8a;
-  min-width: 28px;
+  min-width: 38px;
   flex-shrink: 0;
-  font-size: 7.8pt;
+  font-size: 7.4pt;
+}
+
+.appendix-quickref-item .quickref-num.num-span {
+  color: #0f172a;
+  background: #e2e8f0;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.appendix-quickref-item.quickref-span-item {
+  background: rgba(241, 245, 249, 0.6);
+  border-bottom: 0.5pt solid #64748b;
+  font-weight: 600;
 }
 
 .appendix-quickref-item .quickref-title {
@@ -1504,6 +1797,41 @@ body {
   flex: 1;
   word-break: break-word;
   line-height: 1.35;
+}
+
+.quickref-tag {
+  display: inline-block;
+  font-size: 6.2pt;
+  font-weight: 700;
+  padding: 0.2px 3.5px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+  line-height: 1.15;
+}
+
+.quickref-tag.tag-formula {
+  background: #fef3c7;
+  color: #b45309;
+  border: 0.4pt solid #f59e0b;
+}
+
+.quickref-tag.tag-compare {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 0.4pt solid #0ea5e9;
+}
+
+.quickref-tag.tag-diagram {
+  background: #f3e8ff;
+  color: #6b21a8;
+  border: 0.4pt solid #a855f7;
+}
+
+.quickref-tag.tag-default {
+  background: #f1f5f9;
+  color: #334155;
+  border: 0.4pt solid #94a3b8;
 }
 
 .appendix-term-item {
@@ -1553,6 +1881,156 @@ body {
 @keyframes slide-toast {
   from { transform: translateY(16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* ========================================================
+   自訂筆記 Markdown & KaTeX 數學公式微縮印刷排版
+   ======================================================== */
+.appendix-markdown-content {
+  flex: 1;
+  column-count: 3;
+  column-gap: 5.5mm;
+  column-rule: 0.5pt solid #cbd5e1;
+  font-size: 7.2pt;
+  line-height: 1.38;
+  height: calc(297mm - 32mm);
+  max-height: calc(297mm - 32mm);
+  overflow: hidden;
+  color: #0f172a;
+}
+
+.appendix-markdown-content h1,
+.appendix-markdown-content h2,
+.appendix-markdown-content h3,
+.appendix-markdown-content h4 {
+  break-after: avoid;
+  break-inside: avoid;
+  margin: 1.5mm 0 1mm 0;
+  font-weight: 700;
+  color: #000000;
+  border-bottom: 0.5pt solid #94a3b8;
+  padding-bottom: 0.5mm;
+}
+
+.appendix-markdown-content h1 {
+  font-size: 9pt;
+  border-bottom: 1pt solid #000;
+}
+
+.appendix-markdown-content h2 {
+  font-size: 8.2pt;
+}
+
+.appendix-markdown-content h3 {
+  font-size: 7.5pt;
+  border-bottom: 0.5pt dotted #94a3b8;
+}
+
+.appendix-markdown-content h4 {
+  font-size: 7pt;
+  border-bottom: none;
+}
+
+.appendix-markdown-content p {
+  margin: 0 0 1.2mm 0;
+  word-break: break-word;
+}
+
+.appendix-markdown-content ul,
+.appendix-markdown-content ol {
+  margin: 0 0 1.5mm 0;
+  padding-left: 3.5mm;
+}
+
+.appendix-markdown-content li {
+  margin-bottom: 0.6mm;
+  word-break: break-word;
+}
+
+.appendix-markdown-content strong {
+  color: #000000;
+  font-weight: 700;
+}
+
+.appendix-markdown-content pre {
+  background: #f8fafc;
+  border: 0.5pt solid #cbd5e1;
+  border-radius: 2px;
+  padding: 1.2mm 1.5mm;
+  margin: 1mm 0 1.5mm 0;
+  font-family: var(--font-mono);
+  font-size: 6.5pt;
+  line-height: 1.25;
+  white-space: pre-wrap;
+  word-break: break-all;
+  break-inside: avoid;
+}
+
+.appendix-markdown-content code {
+  font-family: var(--font-mono);
+  font-size: 6.8pt;
+  background: #f1f5f9;
+  padding: 0.5px 2px;
+  border-radius: 2px;
+  border: 0.4pt solid #e2e8f0;
+}
+
+.appendix-markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2mm 0 1.8mm 0;
+  font-size: 6.5pt;
+  line-height: 1.25;
+  break-inside: avoid;
+}
+
+.appendix-markdown-content th,
+.appendix-markdown-content td {
+  border: 0.5pt solid #94a3b8;
+  padding: 1.2px 2px;
+  text-align: left;
+}
+
+.appendix-markdown-content th {
+  background: #e2e8f0;
+  font-weight: 700;
+  color: #000;
+}
+
+.appendix-markdown-content blockquote {
+  border-left: 2pt solid #64748b;
+  margin: 1mm 0 1.5mm 0;
+  padding-left: 2mm;
+  color: #334155;
+  font-style: italic;
+  break-inside: avoid;
+}
+
+.appendix-markdown-content hr {
+  border: none;
+  border-top: 0.5pt solid #cbd5e1;
+  margin: 1.5mm 0;
+}
+
+/* KaTeX 數學公式適應微調 */
+.appendix-markdown-content .katex-display {
+  margin: 1mm 0 !important;
+  break-inside: avoid;
+  font-size: 0.9em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1px 0;
+}
+
+.appendix-markdown-content .katex {
+  font-size: 0.95em;
+  line-height: 1.15;
+}
+
+.appendix-markdown-content .katex-error {
+  color: #dc2626;
+  font-family: var(--font-mono);
+  font-size: 6.8pt;
 }
 
 .hidden {

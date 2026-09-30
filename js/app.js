@@ -113,6 +113,7 @@ class TENoterWizardApp {
     this.customNotesArea = document.getElementById('customNotesArea');
     this.customNotesInput = document.getElementById('customNotesInput');
     this.customNotesCharCount = document.getElementById('customNotesCharCount');
+    this.btnCopyNotesPrompt = document.getElementById('btnCopyNotesPrompt');
 
     // STEP 6 元素 (最終成果)
     this.btnExportVectorPdf = document.getElementById('btnExportVectorPdf');
@@ -227,11 +228,15 @@ class TENoterWizardApp {
       this.updateStats();
     });
 
+    if (this.btnCopyNotesPrompt) {
+      this.btnCopyNotesPrompt.addEventListener('click', () => this.copyNotesPrompt());
+    }
+
     this.customNotesInput.addEventListener('input', (e) => {
       this.state.customNotesText = e.target.value;
       const count = this.state.customNotesText.length;
-      const estPages = Math.ceil(count / 1400) || (count > 0 ? 1 : 0);
-      this.customNotesCharCount.textContent = `共 ${count} 字元 (預估約佔 ${estPages} 頁 A4)`;
+      const estPages = this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText).length || (count > 0 ? 1 : 0);
+      this.customNotesCharCount.textContent = `共 ${count} 字元 (預估約佔 ${estPages} 頁 A4，完整支援 Markdown & LaTeX 公式)`;
       this.updateStats();
     });
 
@@ -343,12 +348,12 @@ class TENoterWizardApp {
     if (this.currentStep === 6) {
       this.btnNextStep.innerHTML = `
         <span>立即列印 / 另存 PDF</span>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
       `;
     } else {
       this.btnNextStep.innerHTML = `
         <span>下一步</span>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"></polyline></svg>
       `;
     }
   }
@@ -396,14 +401,13 @@ class TENoterWizardApp {
 
     // 附錄頁數累加 (精確對應多頁拆分)
     if (this.state.enableVocab && this.state.vocabList.length > 0) {
-      appendixSheetsCount += Math.ceil(this.state.vocabList.length / 140);
+      appendixSheetsCount += Math.ceil(this.state.vocabList.length / 105);
     }
     if (this.state.enableQuickRef && this.state.keyPointsList.length > 0) {
-      appendixSheetsCount += Math.ceil(this.state.keyPointsList.length / 64);
+      appendixSheetsCount += Math.ceil(this.state.keyPointsList.length / 114);
     }
     if (this.state.enableCustomNotes && this.state.customNotesText.trim().length > 0) {
-      const lines = this.state.customNotesText.split('\n').filter(l => l.trim().length > 0);
-      appendixSheetsCount += Math.ceil(lines.length / 65);
+      appendixSheetsCount += this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText).length;
     }
 
     const totalSheets = slideSheets + appendixSheetsCount;
@@ -412,7 +416,7 @@ class TENoterWizardApp {
     this.sideStatPapers.textContent = `${totalSheets} 面 (${doubleSheets} 張雙面)`;
     this.sideStatLayout.textContent = `直式 ${this.state.cols}×${this.state.rows}`;
 
-    // 省紙效益計算：原始簡報雙面列印張數 vs 大抄雙面列印張數
+    // 省紙效益計算：原始簡報雙面列印張數 vs 紙本資料雙面列印張數
     const originalDoubleSheets = Math.ceil(activeCount / 2);
     const savedSheets = Math.max(0, originalDoubleSheets - doubleSheets);
     const savingsRatio = originalDoubleSheets > 0 ? (savedSheets / originalDoubleSheets) : 0;
@@ -627,6 +631,54 @@ class TENoterWizardApp {
     const prompt = this.searchEngine.generateFullSlidesAIPrompt(activeSlides);
     navigator.clipboard.writeText(prompt).then(() => {
       this.showToast(`📋 已複製全簡報文字 (${activeSlides.length} 頁) 與深度分析 Prompt！請直接貼給 ChatGPT / Claude`);
+
+      // 按鈕即時狀態視覺反饋
+      if (this.btnCopyVocabPrompt) {
+        this.btnCopyVocabPrompt.classList.add('copied');
+        const main = this.btnCopyVocabPrompt.querySelector('.btn-copy-main');
+        const badge = this.btnCopyVocabPrompt.querySelector('.btn-copy-badge');
+        const origMain = main ? main.textContent : '';
+        const origBadge = badge ? badge.textContent : '';
+
+        if (main) main.textContent = '✅ 已成功複製全簡報 Prompt 到剪貼簿！';
+        if (badge) badge.textContent = '已複製 ✓';
+
+        setTimeout(() => {
+          this.btnCopyVocabPrompt.classList.remove('copied');
+          if (main) main.textContent = origMain;
+          if (badge) badge.textContent = origBadge;
+        }, 2800);
+      }
+    }).catch(() => {
+      this.showToast('⚠️ 複製失敗，請手動選取');
+    });
+  }
+
+  /**
+   * 複製專屬期末考大抄 AI 整理 Prompt (專為搭配簡報檔案附件上傳設計)
+   */
+  copyNotesPrompt() {
+    const prompt = this.searchEngine.getNotesPromptTemplate();
+
+    navigator.clipboard.writeText(prompt).then(() => {
+      this.showToast('📋 已複製終極考前大抄 Prompt！請連同簡報檔案 (PDF) 一同貼給 ChatGPT / Claude');
+
+      if (this.btnCopyNotesPrompt) {
+        this.btnCopyNotesPrompt.classList.add('copied');
+        const main = this.btnCopyNotesPrompt.querySelector('.btn-copy-main');
+        const badge = this.btnCopyNotesPrompt.querySelector('.btn-copy-badge');
+        const origMain = main ? main.textContent : '';
+        const origBadge = badge ? badge.textContent : '';
+
+        if (main) main.textContent = '✅ 已成功複製 Prompt！請連同簡報檔案一起貼給 AI';
+        if (badge) badge.textContent = '已複製 ✓';
+
+        setTimeout(() => {
+          this.btnCopyNotesPrompt.classList.remove('copied');
+          if (main) main.textContent = origMain;
+          if (badge) badge.textContent = origBadge;
+        }, 2800);
+      }
     }).catch(() => {
       this.showToast('⚠️ 複製失敗，請手動選取');
     });
@@ -643,17 +695,22 @@ class TENoterWizardApp {
 
     const parsed = this.searchEngine.parseFullAIResponse(text);
 
-    // 若解析到單字
+    // 若解析到單字 (確保 A ~ Z 字母不分大小寫排序)
     if (parsed.terms && parsed.terms.length > 0) {
+      parsed.terms.sort((a, b) => (a.term || '').localeCompare(b.term || '', 'en', { sensitivity: 'base', numeric: true }));
       this.state.vocabList = parsed.terms;
       this.renderVocabTags();
     }
 
-    // 若解析到考點
+    // 若解析到考點 (確保按頁碼由小到大嚴格排序)
     if (parsed.keypoints && parsed.keypoints.length > 0) {
+      parsed.keypoints.sort((a, b) => {
+        if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
+        return a.isSpan ? -1 : 1;
+      });
       this.state.keyPointsList = parsed.keypoints;
       this.renderQuickRefPreview();
-      this.showToast(`🎉 已自動同步辨識：${parsed.terms.length} 個詞彙 + ${parsed.keypoints.length} 條考點目錄！`);
+      this.showToast(`🎉 已自動同步辨識：${parsed.terms.length} 個詞彙 (A-Z排序) + ${parsed.keypoints.length} 條考點 (頁碼排序)！`);
     }
 
     this.updateStats();
@@ -679,10 +736,24 @@ class TENoterWizardApp {
 
     this.state.keyPointsList.forEach(kp => {
       const row = document.createElement('div');
-      row.className = 'quick-ref-row';
+      const isSpan = kp.isSpan || (kp.pageStr && kp.pageStr.includes('-'));
+      row.className = `quick-ref-row ${isSpan ? 'quick-ref-span-row' : ''}`;
+      const pageDisplay = kp.pageStr || (kp.slideNum ? `#${kp.slideNum}` : '');
+
+      let tagHtml = '';
+      if (kp.tag) {
+        const t = kp.tag.trim();
+        let tagClass = 'tag-default';
+        if (t.includes('公式') || t.includes('計算')) tagClass = 'tag-formula';
+        else if (t.includes('比較') || t.includes('對照')) tagClass = 'tag-compare';
+        else if (t.includes('圖解') || t.includes('架構') || t.includes('流程')) tagClass = 'tag-diagram';
+        else if (t.includes('必考') || t.includes('重點')) tagClass = 'tag-formula';
+        tagHtml = `<span class="quickref-tag ${tagClass}">[${t}]</span>`;
+      }
+
       row.innerHTML = `
-        <span class="quick-ref-page">#${kp.slideNum}</span>
-        <span class="quick-ref-title">${kp.title}</span>
+        <span class="quick-ref-page" style="${isSpan ? 'font-weight:bold; color:#0f172a;' : ''}">${pageDisplay}</span>
+        <span class="quick-ref-title" style="${isSpan ? 'font-weight:600;' : ''}">${tagHtml}${kp.title || kp.fullTitle}</span>
       `;
       this.quickRefPreviewContainer.appendChild(row);
     });
@@ -815,9 +886,9 @@ class TENoterWizardApp {
       // 觸發瀏覽器下載
       const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
-      const baseName = (this.pdfLoader.fileName || '簡報大抄').replace(/\.[^/.]+$/, '');
+      const baseName = (this.pdfLoader.fileName || '簡報紙本資料').replace(/\.[^/.]+$/, '');
       a.href = url;
-      a.download = `${baseName}_高密度大抄_TE-NOTER.pdf`;
+      a.download = `${baseName}_高密度紙本資料_TE-NOTER.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
