@@ -758,8 +758,8 @@ ${slidesContent}`;
     });
 
     // B) 完整連貫表達式 (等式、不等式、運算串接、含相鄰隱式乘積如 C = 0.5 \rho C_d A_{\text{front}}、\frac{R}{W} = \frac{A}{W} + B \cdot V + \frac{C}{W} \cdot V^2)
-    const atom = '(?:\\\\frac\\{[^}]*\\}\\{[^}]*\\}|\\\\[a-zA-Z]+(?:\\{[^}]*\\})*|[A-Za-z](?:_\\{[^}]*\\}|_[a-zA-Z0-9])?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?|\\d+(?:\\.\\d+)?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?)';
-    const op = '(?:[+\\-=<>~≈≥≤·×]|\\\\(?:cdot|times|propto|approx|sim|le|ge|leq|geq|ll|gg|pm|equiv))';
+    const atom = '(?:\\\\frac\\{[^}]*\\}\\{[^}]*\\}|\\\\[a-zA-Z]+(?:\\{[^}]*\\})*(?:_\\{(?:[^{}]*|\\{[^{}]*\\})*\\}|_[a-zA-Z0-9]+)?|[A-Za-z](?:_\\{(?:[^{}]*|\\{[^{}]*\\})*\\}|_[a-zA-Z0-9])?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?|\\d+(?:\\.\\d+)?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?)';
+    const op = '(?::?[-+=<>~≈≥≤·×]|\\\\(?:cdot|times|propto|approx|sim|le|ge|leq|geq|ll|gg|pm|equiv))';
     const exprPattern = new RegExp(`(${atom}(?:\\s*(?:${op}|)\\s*${atom})*)`, 'g');
 
     text = text.replace(exprPattern, (m, g1) => {
@@ -779,7 +779,7 @@ ${slidesContent}`;
     });
 
     // D) 條件與比較關係式：如 V > 250\text{ km/h}、V > 40\text{ mph}、V_{\max} \ge 250\text{ km/h}
-    text = text.replace(/([A-Za-z](?:_\{[^}]*\}|_[a-zA-Z0-9])?\s*(?:[><≥≤]=?|\\(?:geq|leq|gg|ll))\s*\d+(?:\.\d+)?(?:\s*\\text\{[^}]*\})?)/g, (m, g1) => {
+    text = text.replace(/([A-Za-z](?:_\\{(?:[^{}]*|\\{[^{}]*\\})*\\}|_[a-zA-Z0-9])?\\s*(?:[><≥≤]=?|\\(?:geq|leq|gg|ll))\\s*\\d+(?:\\.\\d+)?(?:\\s*\\text\\{[^}]*\\})?)/g, (m, g1) => {
       if (g1.includes('【KATEXTOKEN')) return m;
       return addToken(g1);
     });
@@ -799,11 +799,11 @@ ${slidesContent}`;
     });
 
     // F) 孤立的希臘字母、下標變數與特徵指數：如 \mu_{\text{ad}}、W_{\text{driver}}、10^9\text{ 延人公里}、C_d
-    text = text.replace(/(\\(?:mu|alpha|beta|gamma|theta|sigma|omega|delta|lambda|pi|rho|tau|phi|psi|epsilon)(?:_\{[^}]*\}|_[a-zA-Z0-9]+)?)/g, (m, g1) => {
+    text = text.replace(/(\\(?:mu|alpha|beta|gamma|theta|sigma|omega|delta|lambda|pi|rho|tau|phi|psi|epsilon)(?:_\\{(?:[^{}]*|\\{[^{}]*\\})*\\}|_[a-zA-Z0-9]+)?)/g, (m, g1) => {
       if (g1.includes('【KATEXTOKEN')) return m;
       return addToken(g1);
     });
-    text = text.replace(/(\b[A-Za-z]_\{[^}]*\})/g, (m, g1) => {
+    text = text.replace(/(\b[A-Za-z]_\\{(?:[^{}]*|\\{[^{}]*\\})*\\})/g, (m, g1) => {
       if (g1.includes('【KATEXTOKEN')) return m;
       return addToken(g1);
     });
@@ -947,7 +947,7 @@ ${slidesContent}`;
   createCustomNotesPrintSheets(notesText, options = {}) {
     if (!notesText || notesText.trim() === '') return [];
 
-    const cols = parseInt(options.cols, 10) || 3;
+    const cols = parseInt(options.cols, 10) || 2;
     const enableMemoGrid = options.enableMemoGrid !== false;
 
     const fullHtml = this.renderMarkdownAndLatexToHtml(notesText);

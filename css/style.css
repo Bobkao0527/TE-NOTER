@@ -1916,6 +1916,14 @@ body {
   outline: none;
 }
 
+.custom-select-sm:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+  background-color: var(--bg-subtle, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+  border-style: dashed;
+}
+
 .trackpad-hint {
   font-size: 10px;
   padding: 1px 6px;

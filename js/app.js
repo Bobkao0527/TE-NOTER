@@ -32,7 +32,7 @@ class TENoterWizardApp {
       enableQuickRef: true,
       enableCustomNotes: false,
       customNotesText: '',
-      notesCols: 3,
+      notesCols: 2,
       enableNotesMemoGrid: true,
       vocabList: [],
       keyPointsList: [],
@@ -284,7 +284,7 @@ class TENoterWizardApp {
 
     if (this.selectNotesColumns) {
       this.selectNotesColumns.addEventListener('change', (e) => {
-        this.state.notesCols = parseInt(e.target.value, 10) || 3;
+        this.state.notesCols = parseInt(e.target.value, 10) || 2;
         this.updateStats();
         this.compileFinalDocument();
       });
@@ -518,7 +518,7 @@ class TENoterWizardApp {
     }
     if (this.state.enableCustomNotes && this.state.customNotesText.trim().length > 0) {
       appendixSheetsCount += this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText, {
-        cols: this.state.notesCols || 3,
+        cols: this.state.notesCols || 2,
         enableMemoGrid: this.state.enableNotesMemoGrid !== false
       }).length;
     }
@@ -961,7 +961,7 @@ class TENoterWizardApp {
     const customNotes = (this.customNotesInput ? this.customNotesInput.value : this.state.customNotesText || '').trim();
     if (this.state.enableCustomNotes && customNotes !== '') {
       const notesSheets = this.searchEngine.createCustomNotesPrintSheets(customNotes, {
-        cols: this.state.notesCols || 3,
+        cols: this.state.notesCols || 2,
         enableMemoGrid: this.state.enableNotesMemoGrid !== false
       });
       notesSheets.forEach(sheet => this.finalPrintContainer.appendChild(sheet));
@@ -1046,7 +1046,7 @@ class TENoterWizardApp {
       const customNotes = (this.customNotesInput ? this.customNotesInput.value : this.state.customNotesText || '').trim();
       if (this.state.enableCustomNotes && customNotes !== '') {
         const nSheets = this.searchEngine.createCustomNotesPrintSheets(customNotes, {
-          cols: this.state.notesCols || 3,
+          cols: this.state.notesCols || 2,
           enableMemoGrid: this.state.enableNotesMemoGrid !== false
         });
         appendixSheets.push(...nSheets);

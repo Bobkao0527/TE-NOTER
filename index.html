@@ -256,9 +256,12 @@
               </div>
 
               <div id="quickRefConfigArea" class="option-sub-area">
-                <div class="quickref-box-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                  <span style="font-size: 0.85rem; color: var(--text-secondary);">已收錄 <strong id="quickRefCount" style="color: var(--accent-cyan);">0</strong> 條章節與考點</span>
-                  <button id="btnRefreshQuickRef" class="btn btn-secondary btn-xs" title="依目前已選取之投影片重新自動萃取考點目錄">重新整理考點</button>
+                <div class="quickref-box-header"
+                  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                  <span style="font-size: 0.85rem; color: var(--text-secondary);">已收錄 <strong id="quickRefCount"
+                      style="color: var(--accent-cyan);">0</strong> 條章節與考點</span>
+                  <button id="btnRefreshQuickRef" class="btn btn-secondary btn-xs"
+                    title="依目前已選取之投影片重新自動萃取考點目錄">重新整理考點</button>
                 </div>
                 <div class="quick-ref-preview-table" id="quickRefPreviewContainer">
                   <div class="table-loading-hint">正在從每頁投影片提取標題與重點...</div>
@@ -346,10 +349,8 @@
                   </div>
                   <div class="notes-config-right">
                     <label for="selectNotesColumns" class="config-label">排版密度:</label>
-                    <select id="selectNotesColumns" class="custom-select-sm" title="調整自訂筆記的排版欄數與字級密度">
-                      <option value="3" selected>標準 3 欄 (7.2pt 高密度)</option>
-                      <option value="4">極限 4 欄 (6.6pt 超微縮)</option>
-                      <option value="2">舒適 2 欄 (8.0pt 易讀)</option>
+                    <select id="selectNotesColumns" class="custom-select-sm" title="自訂筆記排版已鎖定為舒適 2 欄 (8.0pt 易讀)" disabled>
+                      <option value="2" selected>舒適 2 欄 (8.0pt 易讀) 🔒</option>
                     </select>
                   </div>
                 </div>
