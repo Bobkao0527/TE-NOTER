@@ -37,6 +37,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+
+  <!-- html2canvas CDN (將 Markdown 與 KaTeX 渲染之 DOM 轉為超高畫質無損畫布，避開 SVG 跨域污染) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 
 <body class="theme-dark print-orientation-portrait">
@@ -61,13 +64,13 @@
         <span class="pulse-dot"></span>
         <span class="privacy-text">100% 本地端隱私</span>
       </div>
-      <button id="btnQuickPrint" class="btn btn-primary btn-sm" title="直接列印當前畫面（⌘P / Ctrl+P）">
+      <button id="btnQuickExport" class="btn btn-primary btn-sm" title="導出高畫質向量 PDF（⌘P / Ctrl+P 或 ⌘S）">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="6 9 6 2 18 2 18 9"></polyline>
-          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-          <rect x="6" y="14" width="12" height="8"></rect>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
         </svg>
-        <span>列印 / 存為 PDF</span>
+        <span>導出 PDF</span>
         <kbd class="kbd-badge">⌘P</kbd>
       </button>
     </div>
@@ -253,6 +256,10 @@
               </div>
 
               <div id="quickRefConfigArea" class="option-sub-area">
+                <div class="quickref-box-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                  <span style="font-size: 0.85rem; color: var(--text-secondary);">已收錄 <strong id="quickRefCount" style="color: var(--accent-cyan);">0</strong> 條章節與考點</span>
+                  <button id="btnRefreshQuickRef" class="btn btn-secondary btn-xs" title="依目前已選取之投影片重新自動萃取考點目錄">重新整理考點</button>
+                </div>
                 <div class="quick-ref-preview-table" id="quickRefPreviewContainer">
                   <div class="table-loading-hint">正在從每頁投影片提取標題與重點...</div>
                 </div>
@@ -328,6 +335,24 @@
                 <div class="textarea-footer">
                   <span id="customNotesCharCount" class="notes-char-count">共 0 字元 (預估約佔 0 頁 A4)</span>
                 </div>
+
+                <!-- 外部筆記空間最佳化與排版控制條 -->
+                <div class="notes-config-strip">
+                  <div class="notes-config-left">
+                    <label class="custom-chk-sm" title="若筆記未填滿整頁，自動在末頁下方生成點陣手寫備忘區，方便考前突發速記，不浪費任何紙本空間">
+                      <input type="checkbox" id="chkNotesMemoGrid" checked>
+                      <span>末頁空白自動填補「✎ 考前手寫備忘網格」（極限省紙不留白）</span>
+                    </label>
+                  </div>
+                  <div class="notes-config-right">
+                    <label for="selectNotesColumns" class="config-label">排版密度:</label>
+                    <select id="selectNotesColumns" class="custom-select-sm" title="調整自訂筆記的排版欄數與字級密度">
+                      <option value="3" selected>標準 3 欄 (7.2pt 高密度)</option>
+                      <option value="4">極限 4 欄 (6.6pt 超微縮)</option>
+                      <option value="2">舒適 2 欄 (8.0pt 易讀)</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -342,31 +367,23 @@
               <div>
                 <span class="step-badge-num">STEP 6</span>
                 <h2 class="step-title">預覽最終紙本資料成果並導出 PDF</h2>
-                <p class="step-desc">您的專屬紙本資料已組裝完成！包含精選簡報、附錄速查表與自訂筆記，可直接列印或另存為 PDF 檔案。</p>
+                <p class="step-desc">您的專屬紙本資料已組裝完成！包含精選簡報、附錄速查表與自訂筆記，可直接導出為高畫質向量 PDF 檔案。</p>
               </div>
               <div class="step-header-actions">
                 <button id="btnExportVectorPdf" class="btn btn-primary btn-md"
-                  title="使用純前端 PDF-lib 向量合成，100% 原始解析度且內建安全邊距，完全防止印表機切邊！">
+                  title="使用純前端 PDF-lib 向量合成，100% 原始解析度且內建安全邊距，完美輸出 A4 PDF！">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="7 10 12 15 17 10"></polyline>
                     <line x1="12" y1="15" x2="12" y2="3"></line>
                   </svg>
                   <span>✨ 匯出標準高畫質 PDF</span>
-                </button>
-                <button id="btnFinalPrint" class="btn btn-secondary btn-md" title="直接開啟瀏覽器列印對話框（⌘P / Ctrl+P）">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <rect x="6" y="14" width="12" height="8"></rect>
-                  </svg>
-                  <span>系統列印</span>
                   <kbd class="kbd-badge">⌘P</kbd>
                 </button>
               </div>
             </div>
 
-            <!-- 列印選項微調條 -->
+            <!-- 排版選項微調條 -->
             <div class="final-options-strip">
               <div class="options-strip-left">
                 <label class="custom-chk-sm">
@@ -383,9 +400,12 @@
                 </label>
               </div>
               <div class="options-strip-right">
-                <label for="finalZoomSlider" class="zoom-label">A4 預覽縮放:</label>
-                <input type="range" id="finalZoomSlider" min="0.4" max="1.2" step="0.05" value="0.75"
-                  class="slider-scale">
+                <label for="finalZoomSlider" class="zoom-label" title="支援觸控板雙指捏合開闔縮放或 Ctrl + 滾輪">
+                  <span>A4 縮放:</span>
+                  <span class="trackpad-hint" title="可直接在預覽區使用觸控板雙指開闔捏合縮放">🤏 雙指捏合</span>
+                </label>
+                <input type="range" id="finalZoomSlider" min="0.35" max="1.5" step="0.05" value="0.75"
+                  class="slider-scale" title="拖動或使用觸控板雙指開闔捏合縮放 (35% ~ 150%)">
                 <span id="finalZoomVal" class="zoom-val-badge">75%</span>
               </div>
             </div>
@@ -488,7 +508,7 @@
           </div>
           <div class="timeline-content">
             <span class="timeline-step-title">最終成果與導出</span>
-            <span class="timeline-step-sub" id="timelineStep6Sub">A4 預覽與列印</span>
+            <span class="timeline-step-sub" id="timelineStep6Sub">A4 預覽與導出</span>
           </div>
         </div>
       </nav>

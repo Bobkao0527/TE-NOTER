@@ -4,7 +4,7 @@
 .LSOverride
 
 # Editor & IDE
-.vscode/*
+.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -19,3 +19,6 @@ AGENTS.md
 # Logs
 *.log
 npm-debug.log*
+
+# Testdata
+testdata/

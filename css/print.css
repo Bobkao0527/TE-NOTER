@@ -63,7 +63,9 @@
     gap: 0 !important;
     padding: 0 !important;
     margin: 0 !important;
+    margin-bottom: 0 !important;
     zoom: 1 !important;
+    transform: none !important;
   }
 
   /* 單頁包裹容器：由外層統一負責分頁控制，防止單頁被截斷 */
@@ -223,6 +225,8 @@
     color: #000000 !important;
     flex: 1 !important;
     word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
     line-height: 1.35 !important;
   }
 
@@ -268,15 +272,71 @@
   .appendix-print-sheet .appendix-markdown-content {
     background: transparent !important;
     color: #000000 !important;
-    column-count: 3 !important;
+    column-count: 3;
     column-gap: 5.5mm !important;
     column-rule: 0.5pt solid #cbd5e1 !important;
     padding: 0 !important;
-    height: 255mm !important;
-    max-height: 255mm !important;
+    max-height: 272mm !important;
     overflow: hidden !important;
     font-size: 7.2pt !important;
     line-height: 1.38 !important;
+    column-fill: auto !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content.full-page {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content.is-full-sheet {
+    height: 270mm !important;
+    min-height: 270mm !important;
+    max-height: 270mm !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content.has-memo {
+    max-height: 200mm !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content.cols-4 {
+    column-count: 4 !important;
+    column-gap: 4.5mm !important;
+    font-size: 6.6pt !important;
+    line-height: 1.32 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content.cols-2 {
+    column-count: 2 !important;
+    column-gap: 7mm !important;
+    font-size: 8.0pt !important;
+    line-height: 1.42 !important;
+  }
+
+  /* 外部筆記末頁手寫備忘網格列印樣式 */
+  .appendix-print-sheet .appendix-memo-box {
+    margin-top: 3.5mm !important;
+    padding: 2.2mm 3.2mm !important;
+    border: 1pt dashed #475569 !important;
+    border-radius: 2mm !important;
+    background-color: #ffffff !important;
+    flex: 1 !important;
+    min-height: 40mm !important;
+    max-height: 180mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .appendix-print-sheet .appendix-memo-grid {
+    flex: 1 !important;
+    width: 100% !important;
+    min-height: 35mm !important;
+    background-size: 5mm 5mm !important;
+    background-image: radial-gradient(circle, #64748b 0.75pt, transparent 0.75pt) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .appendix-print-sheet .appendix-markdown-content h1,
@@ -293,6 +353,18 @@
     background: #f1f5f9 !important;
     color: #000000 !important;
     border-color: #cbd5e1 !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .appendix-print-sheet .appendix-markdown-content table,

@@ -777,119 +777,6 @@ body {
   border-color: var(--accent-indigo);
 }
 
-/* WebLLM 專屬配置面板 */
-.vocab-webllm-box {
-  background: var(--bg-surface);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: var(--radius-md);
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.webllm-card-banner {
-  margin-bottom: 1rem;
-}
-
-.webllm-badge-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.65rem;
-}
-
-.tech-tag {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
-}
-
-.tech-tag.highlight {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.3);
-}
-
-.tech-tag.success {
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-.webllm-desc {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.webllm-controls-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-  padding: 0.85rem 1rem;
-  background: var(--bg-base);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-}
-
-.control-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.form-input-sm, .form-select-sm {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-medium);
-  color: var(--text-primary);
-  padding: 0.35rem 0.65rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
-}
-
-.webllm-action-area {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.gpu-status-text {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-.webllm-progress-box {
-  background: var(--bg-base);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.85rem 1rem;
-}
-
-.progress-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-}
-
-.progress-text-label {
-  color: #cbd5e1;
-  font-family: var(--font-sans);
-}
-
-.progress-pct-badge {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  color: #38bdf8;
-}
 
 .vocab-box-header {
   display: flex;
@@ -1621,15 +1508,18 @@ body {
   font-weight: 700;
 }
 
-/* 實體列印容器在 Step 6 中的呈現 */
+/* 實體列印容器在 Step 6 中的呈現 (採用 transform: scale 進行幾何縮放，確保 A4 內部文字與欄位 100% 鎖定絕不跑版) */
 .print-pages-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2.5rem;
-  width: 100%;
+  width: max-content;
+  min-width: 210mm;
   padding-bottom: 3rem;
-  zoom: var(--preview-zoom, 0.75);
+  transform: scale(var(--preview-zoom, 0.75));
+  transform-origin: top center;
+  transition: transform 0.05s ease-out;
 }
 
 .print-page-wrapper {
@@ -1796,6 +1686,8 @@ body {
   color: #0f172a;
   flex: 1;
   word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
   line-height: 1.35;
 }
 
@@ -1887,16 +1779,152 @@ body {
    自訂筆記 Markdown & KaTeX 數學公式微縮印刷排版
    ======================================================== */
 .appendix-markdown-content {
-  flex: 1;
+  width: 100%;
   column-count: 3;
   column-gap: 5.5mm;
   column-rule: 0.5pt solid #cbd5e1;
   font-size: 7.2pt;
   line-height: 1.38;
-  height: calc(297mm - 32mm);
   max-height: calc(297mm - 32mm);
   overflow: hidden;
   color: #0f172a;
+  column-fill: auto;
+}
+
+/* 滿頁模式：高度依實際內容決定，若為整頁滿版則強制撐滿消除底部空白 */
+.appendix-markdown-content.full-page {
+  flex: 0 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* 強制滿版模式 (非末頁或滿載頁面)：填滿整頁高度，確保 column-fill: auto 從左至右填滿至底，徹底消除底下大空白 */
+.appendix-markdown-content.is-full-sheet {
+  height: calc(297mm - 26mm);
+  min-height: calc(297mm - 26mm);
+  max-height: calc(297mm - 26mm);
+}
+
+/* 具有手寫備忘區時，高度自動彈性收縮以留出空間 */
+.appendix-markdown-content.has-memo {
+  flex: 0 1 auto;
+  max-height: calc(297mm - 75mm);
+}
+
+/* 4 欄極限微縮 */
+.appendix-markdown-content.cols-4 {
+  column-count: 4;
+  column-gap: 4.5mm;
+  font-size: 6.6pt;
+  line-height: 1.32;
+}
+
+/* 2 欄舒適易讀 */
+.appendix-markdown-content.cols-2 {
+  column-count: 2;
+  column-gap: 7mm;
+  font-size: 8.0pt;
+  line-height: 1.42;
+}
+
+/* 外部筆記末頁手寫備忘網格 (Notes & Memo Grid) */
+.appendix-memo-box {
+  margin-top: 3.5mm;
+  padding: 2.2mm 3.2mm;
+  border: 1pt dashed #94a3b8;
+  border-radius: 2mm;
+  background-color: #fafaf9;
+  flex: 1;
+  min-height: 42mm;
+  max-height: 180mm;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.appendix-memo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 0.5pt solid #cbd5e1;
+  padding-bottom: 1.2mm;
+  margin-bottom: 1.5mm;
+}
+
+.appendix-memo-title {
+  font-size: 7.5pt;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+}
+
+.appendix-memo-hint {
+  font-size: 6.2pt;
+  color: #64748b;
+  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+}
+
+.appendix-memo-grid {
+  flex: 1;
+  width: 100%;
+  min-height: 35mm;
+  background-size: 5mm 5mm;
+  background-image: radial-gradient(circle, #94a3b8 0.75pt, transparent 0.75pt);
+}
+
+/* STEP 5 控制條樣式 */
+.notes-config-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-surface-alt, #f8fafc);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.notes-config-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-config-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+
+.custom-select-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background-color: var(--bg-surface, #ffffff);
+  color: var(--text-primary, #0f172a);
+  outline: none;
+}
+
+.trackpad-hint {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  margin-left: 2px;
 }
 
 .appendix-markdown-content h1,
@@ -1981,7 +2009,11 @@ body {
   margin: 1.2mm 0 1.8mm 0;
   font-size: 6.5pt;
   line-height: 1.25;
-  break-inside: avoid;
+  break-inside: auto; /* 允許表格跨欄自然流動 */
+}
+
+.appendix-markdown-content tr {
+  break-inside: avoid; /* 行本身完整不截斷 */
 }
 
 .appendix-markdown-content th,

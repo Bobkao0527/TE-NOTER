@@ -94,10 +94,10 @@ export class SearchIndexEngine {
         return { slideNum: slide.originalIndex, title: '(無文字頁面)', isExcluded: slide.excluded };
       }
 
-      // 抓取第一行文字或前 60 字作為標題摘要
+      // 抓取第一行文字或前 100 字作為標題摘要 (保留完整文字供多行折行換行)
       const cleanText = slide.text.replace(/\s+/g, ' ').trim();
-      const firstLine = cleanText.split(/[.!?\n]/)[0] || cleanText.substring(0, 45);
-      const title = firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine;
+      const firstLine = cleanText.split(/[\n]/)[0] || cleanText.substring(0, 80);
+      const title = firstLine.trim();
 
       return {
         slideNum: slide.originalIndex,
@@ -220,31 +220,64 @@ ${slidesContent}`;
   /**
    * 解析外部 AI 貼回之自訂文字 (支援 [VOCAB] / [KEYPOINTS] 綜合區塊、頁碼區間如 1-8、標籤如 [公式])
    */
+  /**
+   * 解析外部 AI 貼回之自訂文字 (完整支援 Markdown 表格、[VOCAB] / [KEYPOINTS] 區塊、頁碼區間如 1-8、標籤如 [公式])
+   */
   parseFullAIResponse(text) {
     if (!text || text.trim() === '') return { terms: [], keypoints: [] };
-    const trimmed = text.trim();
+    const raw = text.trim();
 
-    // 檢查是否有 [VOCAB] 或 [KEYPOINTS] 分段
-    if (trimmed.includes('[VOCAB]') || trimmed.includes('[KEYPOINTS]')) {
-      const vocabText = trimmed.includes('[VOCAB]')
-        ? (trimmed.split('[VOCAB]')[1]?.split('[KEYPOINTS]')[0] || '')
-        : '';
-      const keypointsText = trimmed.includes('[KEYPOINTS]')
-        ? (trimmed.split('[KEYPOINTS]')[1] || '')
-        : '';
+    // 檢查是否有 VOCAB 或 KEYPOINTS 分段 (支援 [VOCAB], **[VOCAB]**, # [VOCAB], 【VOCAB】 及不分大小寫)
+    const vocabRegex = /(?:^|\n)\s*(?:#+\s*)?(?:\*\*|__)?(?:\[|【)?(?:VOCAB|單字表|詞彙表)(?:\]|】)?(?:\*\*|__)?\s*/i;
+    const keypointsRegex = /(?:^|\n)\s*(?:#+\s*)?(?:\*\*|__)?(?:\[|【)?(?:KEYPOINTS|考點目錄|章節目錄|重點目錄)(?:\]|】)?(?:\*\*|__)?\s*/i;
+
+    const hasVocab = vocabRegex.test(raw);
+    const hasKeypoints = keypointsRegex.test(raw);
+
+    if (hasVocab || hasKeypoints) {
+      let vocabText = '';
+      let keypointsText = '';
+
+      if (hasVocab && hasKeypoints) {
+        const vocabMatch = raw.match(vocabRegex);
+        const kpMatch = raw.match(keypointsRegex);
+        if (vocabMatch.index < kpMatch.index) {
+          vocabText = raw.substring(vocabMatch.index + vocabMatch[0].length, kpMatch.index);
+          keypointsText = raw.substring(kpMatch.index + kpMatch[0].length);
+        } else {
+          keypointsText = raw.substring(kpMatch.index + kpMatch[0].length, vocabMatch.index);
+          vocabText = raw.substring(vocabMatch.index + vocabMatch[0].length);
+        }
+      } else if (hasVocab) {
+        const vocabMatch = raw.match(vocabRegex);
+        vocabText = raw.substring(vocabMatch.index + vocabMatch[0].length);
+      } else {
+        const kpMatch = raw.match(keypointsRegex);
+        keypointsText = raw.substring(kpMatch.index + kpMatch[0].length);
+      }
 
       const terms = this.parseCustomPastedVocab(vocabText);
       const keypoints = [];
 
       keypointsText.split('\n').map(l => l.trim()).filter(l => l.length > 0).forEach(line => {
-        if (line.includes('頁碼') || line.includes('---') || line.startsWith('範例')) return;
-        if (line.includes('|')) {
-          const parts = line.split('|').map(p => p.trim());
-          const rawPage = parts[0];
+        // 排除表頭分隔線 (如 |---|---| 或 ---) 與範例說明
+        if (/^\s*\|?[\s\-:]+\|\s*$/.test(line) || /^\s*[-=]{3,}\s*$/.test(line)) return;
+        if (line.includes('頁碼') && line.includes('主題')) return;
+        if (line.startsWith('範例') || line.startsWith('註：') || line.startsWith('說明')) return;
+
+        // 清理 Markdown 表格首尾的 '|' 符號，解決開頭包含 '|' 導致 parts[0] 為空字串之嚴重 Bug
+        const cleanLine = line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').trim();
+
+        if (cleanLine.includes('|')) {
+          const parts = cleanLine.split('|').map(p => p.trim());
+          const rawPage = parts[0] || '';
           const rawTitle = parts.slice(1).join(' ') || '';
 
+          // 排除表頭行
+          if (/^(?:頁碼|頁數|Slide|Page|Pages|No\.?)$/i.test(rawPage)) return;
+
           // 提取頁碼與區間 (例如: 1-8, 1~8, P.1-8, P.14, 14, #14)
-          const rangeMatch = rawPage.match(/(\d+)\s*[-~至到]\s*(\d+)/);
+          const rangeMatch = rawPage.match(/(\d+)\s*[-~至到—]\s*(\d+)/);
           const singleMatch = rawPage.match(/(\d+)/);
 
           let pageStr = '';
@@ -281,7 +314,8 @@ ${slidesContent}`;
               tag,
               title: title || rawTitle,
               fullTitle: rawTitle,
-              slideNum: sortKey // 向下相容
+              slideNum: sortKey, // 向下相容
+              isExcluded: false
             });
           }
         }
@@ -290,7 +324,6 @@ ${slidesContent}`;
       // 按照頁碼自動由小到大排序 (主題與考點自然對齊)
       keypoints.sort((a, b) => {
         if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey;
-        // 若起始頁碼相同，主題跨度排在前面，具體考點排後面
         return a.isSpan ? -1 : 1;
       });
 
@@ -305,7 +338,7 @@ ${slidesContent}`;
   }
 
   /**
-   * 解析外部 AI 貼回之自訂單字文字 (支援 "|" 分隔、冒號分隔、JSON 陣列，專注中英對照)
+   * 解析外部 AI 貼回之自訂單字文字 (完整支援 Markdown 表格、"|" 分隔、冒號分隔、JSON 陣列，專注中英對照)
    */
   parseCustomPastedVocab(text) {
     if (!text || text.trim() === '') return [];
@@ -325,18 +358,27 @@ ${slidesContent}`;
       } catch (_) {}
     }
 
-    // 2. 解析每行文本 (支援 "|" 或 ":" 分隔)
+    // 2. 解析每行文本 (支援 Markdown 表格 "|" 或 ":" 分隔)
     const lines = trimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const parsedList = [];
 
     lines.forEach(line => {
-      if (line.includes('英文詞彙') || line.includes('---') || line.startsWith('#')) return;
+      // 排除表格分隔線 (如 |---|---| 或 ---)
+      if (/^\s*\|?[\s\-:]+\|\s*$/.test(line) || /^\s*[-=]{3,}\s*$/.test(line)) return;
+      if (line.includes('英文詞彙') && line.includes('中文')) return;
+      if (line.startsWith('#') || line.startsWith('範例')) return;
+
+      // 清理 Markdown 表格首尾的 '|' 符號
+      const cleanLine = line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').trim();
+      if (/^[\s\-:|]+$/.test(cleanLine)) return;
 
       // 檢查 "|" 分隔 (英文詞彙 | 繁體中文)
-      if (line.includes('|')) {
-        const parts = line.split('|').map(p => p.trim());
+      if (cleanLine.includes('|')) {
+        const parts = cleanLine.split('|').map(p => p.trim());
         const term = parts[0] || '';
         const zh = parts.slice(1).join(' ') || '';
+        if (/^(?:英文|詞彙|單字|Term|Vocabulary)$/i.test(term)) return;
+        if (term.replace(/[-:]/g, '').trim() === '') return;
         if (term || zh) {
           parsedList.push({ term, zh, pages: [] });
           return;
@@ -344,7 +386,7 @@ ${slidesContent}`;
       }
 
       // 檢查冒號分隔 (例如: "TCP: 傳輸控制協定" 或 "Railway [英] / Railroad [美] : 鐵路")
-      const colonMatch = line.match(/^([^:：]+)[:：](.+)$/);
+      const colonMatch = cleanLine.match(/^([^:：]+)[:：](.+)$/);
       if (colonMatch) {
         const term = colonMatch[1].trim();
         const zh = colonMatch[2].trim();
@@ -594,6 +636,211 @@ ${slidesContent}`;
   }
 
   /**
+   * 智慧修復 OCR 雜訊、字元間空格、破損 LaTeX 下標與反斜線，並自動標註未包裹之數學公式
+   * @param {string} raw 
+   * @returns {string} 修復正規化後的 Markdown & LaTeX 文字
+   */
+  /**
+   * 智慧修復 OCR 雜訊、字元間空格、破損 LaTeX 下標與反斜線，並自動標註未包裹之數學公式與 Markdown 清單/表格
+   * @param {string} raw 
+   * @returns {string} 修復正規化後的 Markdown & LaTeX 文字
+   */
+  cleanAndNormalizeMathNotes(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    // 0. Unicode NFKC 歸一化
+    let text = raw.normalize('NFKC');
+
+    // 1. 全形/OCR 標點符號標準化
+    text = text.replace(/｡/g, '。');
+    // 清理無意義的 LaTeX 百分號轉義
+    text = text.replace(/\\%/g, '%');
+
+    // 2. 修復中文字元之間被誤插的空格 (只匹配空格與全形空格，絕不破壞 Tab 分隔符或換行符)
+    for (let i = 0; i < 4; i++) {
+      text = text.replace(/([\u4e00-\u9fa5\u3400-\u4dbf\u2e80-\u2eff\u2f00-\u2fdf])[ \u3000]+([\u4e00-\u9fa5\u3400-\u4dbf\u2e80-\u2eff\u2f00-\u2fdf])/g, '$1$2');
+    }
+
+    // 3. 修復小數點數字周邊空格與大寫 O 誤植
+    text = text.replace(/\b([0-9O])\s*\.\s*([0-9]+)\s*([0-9]+)?\b/gi, (m, a, b, c) => {
+      const lead = a.toUpperCase() === 'O' ? '0' : a;
+      return lead + '.' + b + (c ? c : '');
+    });
+
+    // 4. 收攏常見被拆開的單詞空格
+    text = text.replace(/\bt\s*e\s*x\s*t\b/gi, 'text');
+    text = text.replace(/\bm\s*u\b/gi, 'mu');
+    text = text.replace(/\bs\s*i\s*m\b/gi, 'sim');
+    text = text.replace(/\ba\s*p\s*p\s*r\s*o\s*x\b/gi, 'approx');
+    text = text.replace(/\ba\s*d\b/gi, 'ad');
+    text = text.replace(/\b(?:a|d)\s*r\s*i\s*v\s*e\s*r\b/gi, 'driver');
+    text = text.replace(/\bt\s*r\s*a\s*c\s*t\s*i\s*o\s*n\b/gi, 'traction');
+
+    // 5. 修復反斜線誤辨與空格
+    text = text.replace(/\\\s*([a-zA-Z]+)/g, '\\$1');
+    text = text.replace(/\b(?:l\s*approx|lapprox)\b/gi, '\\approx');
+    text = text.replace(/(?:\|\s*sim\b|\|\s*s\s*i\s*m\b)/gi, ' \\sim ');
+    text = text.replace(/\(\s*sim\s*/gi, '(\\sim ');
+    text = text.replace(/\\approx\s*\n\s*([\d\.]+)/g, '\\approx $1');
+
+    // 6. 清單項目符號標準化：將每行開頭的 ⚬ (U+26AC) 智慧轉換為標準 Markdown 清單符號 - 
+    text = text.replace(/^(\s*)⚬\s+/gm, '$1- ');
+
+    // 7. TSV (Tab 分隔表格) 智慧轉換為 GitHub Flavored Markdown (GFM) 表格
+    const rawLines = text.split('\n');
+    const mergedLines = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const cur = rawLines[i];
+      const next = rawLines[i + 1];
+      if (next && next.startsWith('\t') && cur.includes('\t')) {
+        mergedLines.push(cur);
+      } else if (cur.trim() !== '' && !cur.includes('\t') && !cur.startsWith('#') && !cur.startsWith('-') && !cur.startsWith('*') && !/^表\s*\d+/i.test(cur.trim()) && next && /^\([A-Za-z0-9\s]+\)\t/.test(next.trim())) {
+        // 單元格換行如「支撐\n(Support)\t...」合併為單行
+        rawLines[i + 1] = cur.trim() + ' ' + next.trim();
+      } else {
+        mergedLines.push(cur);
+      }
+    }
+
+    const formattedLines = [];
+    let tableRows = [];
+    const flushTable = () => {
+      if (tableRows.length === 0) return;
+      if (tableRows.length >= 2) {
+        const colCount = Math.max(...tableRows.map(r => r.length));
+        const header = '| ' + tableRows[0].map(c => c.trim()).concat(Array(colCount - tableRows[0].length).fill('')).join(' | ') + ' |';
+        const sep = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
+        formattedLines.push(header);
+        formattedLines.push(sep);
+        for (let k = 1; k < tableRows.length; k++) {
+          const row = '| ' + tableRows[k].map(c => c.trim()).concat(Array(colCount - tableRows[k].length).fill('')).join(' | ') + ' |';
+          formattedLines.push(row);
+        }
+      } else {
+        tableRows.forEach(r => formattedLines.push(r.join('\t')));
+      }
+      tableRows = [];
+    };
+
+    for (let i = 0; i < mergedLines.length; i++) {
+      const line = mergedLines[i];
+      if (line.includes('\t')) {
+        tableRows.push(line.split('\t'));
+      } else {
+        flushTable();
+        formattedLines.push(line);
+      }
+    }
+    flushTable();
+    text = formattedLines.join('\n');
+
+    // 8. 漸進式 Token 抽取保護機制 (使用無底線純中文括號標籤，徹底杜絕正則誤匹配與 $ 轉義)
+    const mathTokens = [];
+    const addToken = (expr, isBlock = false) => {
+      const cleanExpr = expr.trim();
+      if (!cleanExpr || cleanExpr.includes('【KATEXTOKEN')) return '';
+      const token = `【KATEXTOKEN${mathTokens.length}】`;
+      const wrapped = isBlock ? `$$${cleanExpr}$$` : `$${cleanExpr}$`;
+      mathTokens.push({ token, expr: wrapped });
+      return token;
+    };
+
+    // 8.1 先保護原先合法的 $$ ... $$、\[ ... \]、\( ... \)、$ ... $
+    text = text.replace(/\$\$([\s\S]*?)\$\$/g, (m, g1) => addToken(g1, true));
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (m, g1) => addToken(g1, true));
+    text = text.replace(/\$([^\$\n]+?)\$/g, (m, g1) => addToken(g1, false));
+    text = text.replace(/\\\(([\s\S]*?)\\\)/g, (m, g1) => addToken(g1, false));
+
+    // 8.2 連貫數學表達式自動識別
+    // A) 帶有 \propto 開頭的式子 (遇到中文標點、括號或空白自然結尾，如 \propto W(車重)、\propto W \cdot V)
+    text = text.replace(/(\\propto\s+[^\s，。；：！？\(\)（）]+(?:\s*(?:[+\-·=]|\\cdot)\s*[^\s，。；：！？\(\)（）]+)*)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // B) 完整連貫表達式 (等式、不等式、運算串接、含相鄰隱式乘積如 C = 0.5 \rho C_d A_{\text{front}}、\frac{R}{W} = \frac{A}{W} + B \cdot V + \frac{C}{W} \cdot V^2)
+    const atom = '(?:\\\\frac\\{[^}]*\\}\\{[^}]*\\}|\\\\[a-zA-Z]+(?:\\{[^}]*\\})*|[A-Za-z](?:_\\{[^}]*\\}|_[a-zA-Z0-9])?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?|\\d+(?:\\.\\d+)?(?:\\^\\{?[0-9a-zA-Z+-]+\\}?)?)';
+    const op = '(?:[+\\-=<>~≈≥≤·×]|\\\\(?:cdot|times|propto|approx|sim|le|ge|leq|geq|ll|gg|pm|equiv))';
+    const exprPattern = new RegExp(`(${atom}(?:\\s*(?:${op}|)\\s*${atom})*)`, 'g');
+
+    text = text.replace(exprPattern, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN') || m.includes('【KATEXTOKEN')) return m;
+      if (/\\|[_^]/.test(g1)) {
+        if (/\\[a-zA-Z]+|_\{\\text\{|_[a-zA-Z0-9]\b|\^[0-9{]/.test(g1)) {
+          return addToken(g1);
+        }
+      }
+      return m;
+    });
+
+    // C) 孤立的 \frac{...}{...} (如 \frac{1}{40})
+    text = text.replace(/(\\frac\{[^}]*\}\{[^}]*\})/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // D) 條件與比較關係式：如 V > 250\text{ km/h}、V > 40\text{ mph}、V_{\max} \ge 250\text{ km/h}
+    text = text.replace(/([A-Za-z](?:_\{[^}]*\}|_[a-zA-Z0-9])?\s*(?:[><≥≤]=?|\\(?:geq|leq|gg|ll))\s*\d+(?:\.\d+)?(?:\s*\\text\{[^}]*\})?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(\\(?:le|ge|leq|geq)\s*\d+(?:\.\d+)?(?:\\%|%|\b))/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // E) 區間與近似表示：如 \approx 1 \sim 1.5\text{ cm}^2、\approx 0.25 \sim 0.35、25\% \sim 48\%、90 \sim 120\text{ s}、0.8 \sim 1.5\text{ km}
+    text = text.replace(/((?:\\approx\s*)?\d+(?:\.\d+)?(?:\\%|%)?\s*\\sim\s*\d+(?:\.\d+)?(?:\\%|%)?(?:\s*\\text\{[^}]*\}(?:\^\{?[0-9]+\}?)?)?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(\\approx\s*\d+(?:\.\d+)?(?:\s*\\sim\s*\d+(?:\.\d+)?)?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // F) 孤立的希臘字母、下標變數與特徵指數：如 \mu_{\text{ad}}、W_{\text{driver}}、10^9\text{ 延人公里}、C_d
+    text = text.replace(/(\\(?:mu|alpha|beta|gamma|theta|sigma|omega|delta|lambda|pi|rho|tau|phi|psi|epsilon)(?:_\{[^}]*\}|_[a-zA-Z0-9]+)?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(\b[A-Za-z]_\{[^}]*\})/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(\b[A-Za-z]_[a-zA-Z0-9]\b)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(10\^9(?:\s*\\text\{[^}]*\})?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+    text = text.replace(/(\\text\{[^}]*\}(?:\^\{?[0-9]+\}?)?)/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // G) 孤立的比較/運算符號 (如 2.5 \ll 汽車 16.333 \ll 航空 352 中的 \ll)
+    text = text.replace(/(\\(?:ll|gg))/g, (m, g1) => {
+      if (g1.includes('【KATEXTOKEN')) return m;
+      return addToken(g1);
+    });
+
+    // 8.3 安全還原暫存的公式 Token (使用 split.join 徹底杜絕 $ 字符轉義 bug)
+    mathTokens.forEach(item => {
+      text = text.split(item.token).join(item.expr);
+    });
+
+    // 9. 括號與標點修飾 (只在行內修飾空格，不破壞 Tab 分隔符號與換行符號)
+    text = text.replace(/\([ \u3000]+/g, '(');
+    text = text.replace(/[ \u3000]+\)/g, ')');
+    text = text.replace(/[ \u3000]+([，。；：！？、])/g, '$1');
+    text = text.replace(/([，。；：！？、])[ \u3000]+([\u4e00-\u9fa5])/g, '$1$2');
+
+    return text;
+  }
+
+  /**
    * 智慧解析 Markdown 與 LaTeX 數學公式為高美感 HTML
    * 透過 Token 保護機制避免 LaTeX 底線與星號被 Markdown 解析器破壞
    * @param {string} rawText 
@@ -602,9 +849,12 @@ ${slidesContent}`;
   renderMarkdownAndLatexToHtml(rawText) {
     if (!rawText || rawText.trim() === '') return '';
 
+    // 0. 前置智慧正規化：修復 OCR 雜訊與破損 LaTeX 語法、轉換清單與表格
+    const normalizedText = this.cleanAndNormalizeMathNotes(rawText);
+
     // 1. 抽取並保護 LaTeX 公式 (避免底線 _ 或星號 * 被 Markdown 當作斜體/粗體語法)
     const mathTokens = [];
-    let text = rawText;
+    let text = normalizedText;
 
     // 獨立區塊公式: $$ ... $$ 或 \[ ... \]
     text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
@@ -653,18 +903,31 @@ ${slidesContent}`;
         .replace(/\n/gim, '<br>');
     }
 
-    // 3. 還原並渲染 KaTeX 公式
+    // 3. 還原並渲染 KaTeX 公式 (含容錯自我修復)
     mathTokens.forEach((item, idx) => {
       const token = item.type === 'block' ? `KATEXBLOCKTOKEN${idx}ENDTOKEN` : `KATEXINLINETOKEN${idx}ENDTOKEN`;
       let renderedMath = '';
       if (typeof window !== 'undefined' && window.katex && typeof window.katex.renderToString === 'function') {
+        let formula = item.formula;
         try {
-          renderedMath = window.katex.renderToString(item.formula, {
+          renderedMath = window.katex.renderToString(formula, {
             displayMode: item.type === 'block',
             throwOnError: false,
           });
         } catch (e) {
-          renderedMath = `<span class="katex-error">${item.formula}</span>`;
+          // 自我容錯：若為 \propto 等關係符號開頭，補上空分組 {}
+          try {
+            if (/^\\(?:propto|sim|approx|ge|le|leq|geq)/.test(formula)) {
+              renderedMath = window.katex.renderToString('{} ' + formula, {
+                displayMode: item.type === 'block',
+                throwOnError: false,
+              });
+            } else {
+              renderedMath = `<code class="katex-error">${formula}</code>`;
+            }
+          } catch (e2) {
+            renderedMath = `<code class="katex-error">${formula}</code>`;
+          }
         }
       } else {
         renderedMath = item.type === 'block' ? `$$${item.formula}$$` : `$${item.formula}$`;
@@ -676,12 +939,16 @@ ${slidesContent}`;
   }
 
   /**
-   * 產生大抄末頁實體列印專用「外部自訂 AI 筆記」A4 紙張節點 (支援 Markdown、LaTeX 公式與自動分頁)
-   * @param {string} notesText 
+   * 產生大抄末頁實體列印專用「外部 AI 自訂筆記」A4 紙張節點 (支援多頁自動分頁、Markdown & LaTeX 與手寫備忘網格)
+   * @param {string} notesText 筆記原始文字
+   * @param {Object} options 配置參數 { cols: 3, enableMemoGrid: true }
    * @returns {Array<HTMLElement>}
    */
-  createCustomNotesPrintSheets(notesText) {
+  createCustomNotesPrintSheets(notesText, options = {}) {
     if (!notesText || notesText.trim() === '') return [];
+
+    const cols = parseInt(options.cols, 10) || 3;
+    const enableMemoGrid = options.enableMemoGrid !== false;
 
     const fullHtml = this.renderMarkdownAndLatexToHtml(notesText);
 
@@ -690,47 +957,139 @@ ${slidesContent}`;
     tempContainer.innerHTML = fullHtml;
     const childNodes = Array.from(tempContainer.children);
 
-    // 若沒有標準 block 標籤（如純文字貼入），直接按段落處理
-    const blocks = childNodes.length > 0 ? childNodes : [tempContainer];
+    const rawBlocks = childNodes.length > 0 ? childNodes : [tempContainer];
 
-    // 每頁 3 欄總高度容量估算 (3 欄 * 255mm = 765mm 單位權重，設定 720mm 為安全單頁上限)
-    const MAX_PAGE_UNITS = 720;
-    const pagesBlocks = [];
+    // 細粒度元素拆分：
+    // 1. 若 ul/ol 包含超過 4 個 li，以 3 個為一組拆分
+    // 2. 若 table 超過 8 列 tr，以 5 列為一組拆分 (保留 thead)，確保跨欄與分頁平滑自然
+    const blocks = [];
+    rawBlocks.forEach(b => {
+      const tag = b.tagName ? b.tagName.toLowerCase() : '';
+      if ((tag === 'ul' || tag === 'ol') && b.children.length > 4) {
+        const lis = Array.from(b.children);
+        const chunkSize = 3;
+        for (let i = 0; i < lis.length; i += chunkSize) {
+          const subList = document.createElement(tag);
+          lis.slice(i, i + chunkSize).forEach(li => subList.appendChild(li.cloneNode(true)));
+          blocks.push(subList);
+        }
+      } else if (tag === 'table') {
+        const thead = b.querySelector('thead');
+        const trs = Array.from(b.querySelectorAll('tbody tr') || b.querySelectorAll('tr'));
+        if (trs.length > 8) {
+          const chunkSize = 5;
+          for (let i = 0; i < trs.length; i += chunkSize) {
+            const subTable = document.createElement('table');
+            if (thead) subTable.appendChild(thead.cloneNode(true));
+            const subTbody = document.createElement('tbody');
+            trs.slice(i, i + chunkSize).forEach(tr => subTbody.appendChild(tr.cloneNode(true)));
+            subTable.appendChild(subTbody);
+            blocks.push(subTable);
+          }
+        } else {
+          blocks.push(b);
+        }
+      } else {
+        blocks.push(b);
+      }
+    });
+
+    // 依據欄數計算每行字數容量與單頁安全高度上限 (mm)
+    // A4 297mm - 邊距 8mm - 頁首 11mm = 278mm 可用高度
+    let charsPerLine = 24;
+    let lineHeightMm = 3.5;
+    let maxPageUnits = 790; // 3 欄標準：3 * 270mm = 810mm，設定 790mm 緊湊且滿版
+
+    if (cols === 4) {
+      charsPerLine = 18;
+      lineHeightMm = 3.2;
+      maxPageUnits = 1040; // 4 欄極限：4 * 270mm = 1080mm，設定 1040mm
+    } else if (cols === 2) {
+      charsPerLine = 36;
+      lineHeightMm = 3.8;
+      maxPageUnits = 530; // 2 欄舒適：2 * 270mm = 540mm，設定 530mm
+    }
+
+    // 精準視覺高度精算器 (剔除 KaTeX 標籤灌水，還原真實文字行數與公式實體尺寸)
+    const estimateNodeUnits = (block) => {
+      const tag = block.tagName ? block.tagName.toLowerCase() : 'p';
+
+      let units = 5;
+      if (tag === 'h1') units = 8.0;
+      else if (tag === 'h2') units = 6.8;
+      else if (tag === 'h3') units = 5.8;
+      else if (tag === 'h4') units = 4.8;
+      else if (tag === 'hr') units = 2.5;
+      else if (tag === 'pre') {
+        const text = block.textContent || '';
+        const lineCount = (text.match(/\n/g) || []).length + 1;
+        units = Math.max(14, lineCount * 3.8 + 4);
+      } else if (tag === 'table') {
+        const rows = block.querySelectorAll ? block.querySelectorAll('tr').length : 1;
+        units = Math.max(12, rows * 4.6 + 3);
+      } else if (tag === 'ul' || tag === 'ol') {
+        const lis = block.querySelectorAll ? Array.from(block.querySelectorAll('li')) : [];
+        if (lis.length > 0) {
+          let listTotal = 1.2;
+          lis.forEach(li => {
+            // 分離 li 內的 KaTeX
+            const clone = li.cloneNode(true);
+            const kDisplays = clone.querySelectorAll ? clone.querySelectorAll('.katex-display') : [];
+            const kDisplaysCount = kDisplays.length;
+            const kAll = clone.querySelectorAll ? clone.querySelectorAll('.katex') : [];
+            const kInlineCount = Math.max(0, kAll.length - kDisplaysCount);
+            kAll.forEach(k => k.remove ? k.remove() : null);
+            const plain = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+            const effLen = plain.length + (kInlineCount * 6);
+            const liLines = Math.max(1, Math.ceil(effLen / (charsPerLine - 1)));
+            listTotal += liLines * lineHeightMm + 0.8 + (kDisplaysCount * 10);
+          });
+          units = listTotal;
+        } else {
+          units = 8;
+        }
+      } else {
+        // 段落與公式
+        const clone = block.cloneNode(true);
+        const kDisplays = clone.querySelectorAll ? clone.querySelectorAll('.katex-display') : [];
+        const kDisplaysCount = kDisplays.length;
+        const kAll = clone.querySelectorAll ? clone.querySelectorAll('.katex') : [];
+        const kInlineCount = Math.max(0, kAll.length - kDisplaysCount);
+        kAll.forEach(k => k.remove ? k.remove() : null);
+        const plain = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        const effLen = plain.length + (kInlineCount * 6);
+        const estLines = Math.max(1, Math.ceil(effLen / charsPerLine));
+        units = estLines * lineHeightMm + 1.2 + (kDisplaysCount * 11);
+      }
+
+      block._estimatedUnits = units;
+      return units;
+    };
+
+    const pagesGroups = [];
     let currentBlocks = [];
     let currentUnits = 0;
 
     blocks.forEach(block => {
-      const tag = block.tagName ? block.tagName.toLowerCase() : 'p';
-      const textLen = (block.textContent || '').length;
-
-      // 估算元素高度權重 (mm)
-      let units = 8;
-      if (tag === 'h1') units = 22;
-      else if (tag === 'h2') units = 18;
-      else if (tag === 'h3') units = 15;
-      else if (tag === 'h4') units = 12;
-      else if (tag === 'pre') {
-        const lineCount = (block.textContent.match(/\n/g) || []).length + 1;
-        units = Math.max(16, lineCount * 7.5);
-      } else if (tag === 'table') {
-        const rows = block.querySelectorAll('tr').length;
-        units = Math.max(20, rows * 10);
-      } else if (tag === 'ul' || tag === 'ol') {
-        const items = block.querySelectorAll('li').length;
-        units = Math.max(12, items * 6.5);
-      } else if (block.querySelector && block.querySelector('.katex-display')) {
-        units = 20;
-      } else {
-        // 段落依字數估算行數 (單欄寬度約 24 個中文字元)
-        const estLines = Math.max(1, Math.ceil(textLen / 24));
-        units = estLines * 5.8;
-      }
+      const units = estimateNodeUnits(block);
 
       // 若目前頁面加上此元素已超過單頁上限，且目前已有內容，則切至新的一頁
-      if (currentUnits + units > MAX_PAGE_UNITS && currentBlocks.length > 0) {
-        pagesBlocks.push(currentBlocks);
-        currentBlocks = [];
-        currentUnits = 0;
+      if (currentUnits + units > maxPageUnits && currentBlocks.length > 0) {
+        // 孤兒標題保護 (Orphan Heading Protection)
+        let carriedHeader = null;
+        if (currentBlocks.length > 1) {
+          const lastBlock = currentBlocks[currentBlocks.length - 1];
+          const lastTag = lastBlock.tagName ? lastBlock.tagName.toLowerCase() : '';
+          if (/^h[1-6]$/.test(lastTag)) {
+            carriedHeader = currentBlocks.pop();
+            currentUnits -= (carriedHeader._estimatedUnits || 6);
+          }
+        }
+
+        pagesGroups.push({ blocks: currentBlocks, units: currentUnits });
+
+        currentBlocks = carriedHeader ? [carriedHeader] : [];
+        currentUnits = carriedHeader ? (carriedHeader._estimatedUnits || 6) : 0;
       }
 
       currentBlocks.push(block);
@@ -738,34 +1097,67 @@ ${slidesContent}`;
     });
 
     if (currentBlocks.length > 0) {
-      pagesBlocks.push(currentBlocks);
+      pagesGroups.push({ blocks: currentBlocks, units: currentUnits });
     }
 
-    const totalPages = pagesBlocks.length;
+    const totalPages = pagesGroups.length;
     const resultWrappers = [];
 
-    pagesBlocks.forEach((pageGroup, pIdx) => {
+    pagesGroups.forEach((group, pIdx) => {
+      const isLastPage = pIdx === totalPages - 1;
       const sheet = document.createElement('div');
       sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
 
       const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+      const colLabel = cols === 4 ? '4 欄極限微縮' : (cols === 2 ? '2 欄舒適排版' : '3 欄標準高密度');
+
       const header = document.createElement('div');
       header.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm;">
           <h2 style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 外部 AI 重點精華筆記${pageLabel}</h2>
-          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">Markdown & LaTeX 3 欄微縮排版</span>
+          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">Markdown & LaTeX ${colLabel}</span>
         </div>
       `;
       sheet.appendChild(header);
 
-      const content = document.createElement('div');
-      content.className = 'appendix-markdown-content';
+      // 判斷是否需要末頁手寫備忘網格
+      const remainingUnits = maxPageUnits - group.units;
+      const shouldAddMemo = isLastPage && enableMemoGrid && (remainingUnits >= 120 || group.units < maxPageUnits * 0.82);
 
-      pageGroup.forEach(b => {
+      const content = document.createElement('div');
+      let colClass = '';
+      if (cols === 4) colClass = 'cols-4';
+      else if (cols === 2) colClass = 'cols-2';
+
+      // 若非最後一頁，強制套用 is-full-sheet 保證整頁高度由左至右填滿，杜絕底下空一大塊
+      const fullSheetClass = !isLastPage || (!shouldAddMemo && group.units >= maxPageUnits * 0.85) ? 'is-full-sheet' : '';
+      content.className = `appendix-markdown-content ${colClass} ${shouldAddMemo ? 'has-memo' : 'full-page'} ${fullSheetClass}`.trim();
+
+      group.blocks.forEach(b => {
         content.appendChild(b.cloneNode(true));
       });
 
       sheet.appendChild(content);
+
+      // 若符合條件，在最後一頁底部填補精美手寫備忘點陣區
+      if (shouldAddMemo) {
+        const memoBox = document.createElement('div');
+        memoBox.className = 'appendix-memo-box';
+        memoBox.innerHTML = `
+          <div class="appendix-memo-header">
+            <div class="appendix-memo-title">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+              <span>考前手寫補充 / 專屬公式備忘區 (Exam Quick Notes & Scratch Pad)</span>
+            </div>
+            <span class="appendix-memo-hint">✎ 預留考場速記、突發重點與公式手寫區 (極限省紙不留白)</span>
+          </div>
+          <div class="appendix-memo-grid"></div>
+        `;
+        sheet.appendChild(memoBox);
+      }
 
       const wrapper = document.createElement('div');
       wrapper.className = 'print-page-wrapper';

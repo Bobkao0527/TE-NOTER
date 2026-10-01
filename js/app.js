@@ -32,6 +32,8 @@ class TENoterWizardApp {
       enableQuickRef: true,
       enableCustomNotes: false,
       customNotesText: '',
+      notesCols: 3,
+      enableNotesMemoGrid: true,
       vocabList: [],
       keyPointsList: [],
       fileName: null
@@ -45,7 +47,7 @@ class TENoterWizardApp {
 
   initElements() {
     // 頂部導航
-    this.btnQuickPrint = document.getElementById('btnQuickPrint');
+    this.btnQuickExport = document.getElementById('btnQuickExport') || document.getElementById('btnQuickPrint');
 
     // 步驟視圖面板
     this.stepPanes = {
@@ -107,6 +109,8 @@ class TENoterWizardApp {
     this.chkEnableQuickRef = document.getElementById('chkEnableQuickRef');
     this.quickRefConfigArea = document.getElementById('quickRefConfigArea');
     this.quickRefPreviewContainer = document.getElementById('quickRefPreviewContainer');
+    this.btnRefreshQuickRef = document.getElementById('btnRefreshQuickRef');
+    this.quickRefCount = document.getElementById('quickRefCount');
 
     // STEP 5 元素 (外部筆記)
     this.chkEnableCustomNotes = document.getElementById('chkEnableCustomNotes');
@@ -114,10 +118,11 @@ class TENoterWizardApp {
     this.customNotesInput = document.getElementById('customNotesInput');
     this.customNotesCharCount = document.getElementById('customNotesCharCount');
     this.btnCopyNotesPrompt = document.getElementById('btnCopyNotesPrompt');
+    this.chkNotesMemoGrid = document.getElementById('chkNotesMemoGrid');
+    this.selectNotesColumns = document.getElementById('selectNotesColumns');
 
     // STEP 6 元素 (最終成果)
     this.btnExportVectorPdf = document.getElementById('btnExportVectorPdf');
-    this.btnFinalPrint = document.getElementById('btnFinalPrint');
     this.finalPrintContainer = document.getElementById('finalPrintContainer');
     this.pdfScrollContainer = document.getElementById('pdfScrollContainer');
     this.chkFinalBadge = document.getElementById('chkFinalBadge');
@@ -125,6 +130,11 @@ class TENoterWizardApp {
     this.chkFinalInkSaver = document.getElementById('chkFinalInkSaver');
     this.finalZoomSlider = document.getElementById('finalZoomSlider');
     this.finalZoomVal = document.getElementById('finalZoomVal');
+
+    // 狀態追蹤
+    this.isCustomVocab = false;
+    this.isCustomKeypoints = false;
+    this.slidesSelectionDirty = false;
 
     // Toast
     this.toastNotification = document.getElementById('toastNotification');
@@ -135,12 +145,13 @@ class TENoterWizardApp {
     this.btnPrevStep.addEventListener('click', () => this.goToPrevStep());
     this.btnNextStep.addEventListener('click', () => this.goToNextStep());
 
-    // 向量 PDF 匯出與列印按鈕
+    // 向量 PDF 導出按鈕
     if (this.btnExportVectorPdf) {
       this.btnExportVectorPdf.addEventListener('click', () => this.handleExportVectorPdf());
     }
-    this.btnQuickPrint.addEventListener('click', () => this.triggerPrint());
-    this.btnFinalPrint.addEventListener('click', () => this.triggerPrint());
+    if (this.btnQuickExport) {
+      this.btnQuickExport.addEventListener('click', () => this.handleExportVectorPdf());
+    }
 
     // 右側時間軸點選跳轉
     this.timelineItems.forEach(item => {
@@ -208,11 +219,16 @@ class TENoterWizardApp {
     this.btnRefreshVocab.addEventListener('click', () => {
       const activeSlides = this.getActiveSlides();
       this.state.vocabList = this.searchEngine.extractVocabulary(activeSlides, 70);
+      this.isCustomVocab = false;
       this.renderVocabTags();
       this.compileFinalDocument();
+      this.showToast('✅ 已重新依目前選取之投影片萃取詞彙！');
     });
     this.btnCopyVocabPrompt.addEventListener('click', () => this.copyVocabPrompt());
-    this.vocabPasteInput.addEventListener('input', (e) => this.handleVocabPasteInput(e.target.value));
+
+    // STEP 3: 輸入防抖
+    const debouncedVocabPaste = this.debounce((val) => this.handleVocabPasteInput(val), 350);
+    this.vocabPasteInput.addEventListener('input', (e) => debouncedVocabPaste(e.target.value));
 
     // STEP 4: 逐頁速查表設定
     this.chkEnableQuickRef.addEventListener('change', (e) => {
@@ -221,24 +237,58 @@ class TENoterWizardApp {
       this.updateStats();
     });
 
+    if (this.btnRefreshQuickRef) {
+      this.btnRefreshQuickRef.addEventListener('click', () => {
+        const activeSlides = this.getActiveSlides();
+        this.state.keyPointsList = this.searchEngine.extractSlideKeyPoints(activeSlides);
+        this.isCustomKeypoints = false;
+        this.renderQuickRefPreview();
+        this.compileFinalDocument();
+        this.showToast('✅ 已重新依目前選取之投影片萃取考點目錄！');
+      });
+    }
+
     // STEP 5: 外部筆記設定
     this.chkEnableCustomNotes.addEventListener('change', (e) => {
       this.state.enableCustomNotes = e.target.checked;
       this.customNotesArea.classList.toggle('hidden', !this.state.enableCustomNotes);
       this.updateStats();
+      this.compileFinalDocument();
     });
 
     if (this.btnCopyNotesPrompt) {
       this.btnCopyNotesPrompt.addEventListener('click', () => this.copyNotesPrompt());
     }
 
+    // STEP 5: 輸入防抖 (即時更新字數統計，防抖編譯 A4 預覽)
+    const debouncedCompileNotes = this.debounce(() => {
+      this.updateStats();
+      this.compileFinalDocument();
+    }, 350);
+
     this.customNotesInput.addEventListener('input', (e) => {
       this.state.customNotesText = e.target.value;
       const count = this.state.customNotesText.length;
-      const estPages = this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText).length || (count > 0 ? 1 : 0);
+      const estPages = Math.max(count > 0 ? 1 : 0, Math.ceil(count / 1800));
       this.customNotesCharCount.textContent = `共 ${count} 字元 (預估約佔 ${estPages} 頁 A4，完整支援 Markdown & LaTeX 公式)`;
-      this.updateStats();
+      debouncedCompileNotes();
     });
+
+    // STEP 5: 外部筆記排版設定 (備忘網格與欄數)
+    if (this.chkNotesMemoGrid) {
+      this.chkNotesMemoGrid.addEventListener('change', (e) => {
+        this.state.enableNotesMemoGrid = e.target.checked;
+        this.compileFinalDocument();
+      });
+    }
+
+    if (this.selectNotesColumns) {
+      this.selectNotesColumns.addEventListener('change', (e) => {
+        this.state.notesCols = parseInt(e.target.value, 10) || 3;
+        this.updateStats();
+        this.compileFinalDocument();
+      });
+    }
 
     // STEP 6: 列印選項微調
     this.chkFinalBadge.addEventListener('change', (e) => {
@@ -254,26 +304,71 @@ class TENoterWizardApp {
     this.chkFinalInkSaver.addEventListener('change', (e) => {
       this.state.inkSaver = e.target.checked;
       document.body.classList.toggle('ink-saver-active', this.state.inkSaver);
+      if (this.state.inkSaver) {
+        this.showToast('💡 已套用黑白高對比預覽模式');
+      }
     });
 
-    // STEP 6: A4 預覽縮放滑桿
+    // STEP 6: A4 預覽縮放滑桿 (採用幾何縮放與負 margin 補償，完全杜絕 CSS 多欄跑版)
     if (this.finalZoomSlider && this.finalZoomVal) {
       this.finalZoomSlider.addEventListener('input', (e) => {
         const zoom = parseFloat(e.target.value);
         this.finalZoomVal.textContent = `${Math.round(zoom * 100)}%`;
-        if (this.finalPrintContainer) {
-          this.finalPrintContainer.style.setProperty('--preview-zoom', zoom);
-        }
+        this.updatePreviewZoom(zoom);
       });
     }
 
-    // 鍵盤快速鍵 (⌘P / Ctrl+P)
+    // STEP 6: 預覽視窗觸控板雙指開闔縮放 (Pinch-to-zoom) 與 Ctrl + 滾輪縮放支援
+    if (this.pdfScrollContainer && this.finalZoomSlider) {
+      this.pdfScrollContainer.addEventListener('wheel', (e) => {
+        // macOS 觸控板雙指開闔捏合時，瀏覽器會觸發 wheel 事件且 e.ctrlKey === true
+        if (e.ctrlKey) {
+          e.preventDefault(); // 阻止瀏覽器默認全視窗放大縮小
+          const currentZoom = parseFloat(this.finalZoomSlider.value) || 0.75;
+          // deltaY 在雙指張開(放大)時為負，捏合(縮小)時為正
+          const delta = -e.deltaY;
+          const zoomDelta = delta * 0.005;
+          let nextZoom = Math.min(Math.max(currentZoom + zoomDelta, 0.35), 1.5);
+          nextZoom = Math.round(nextZoom * 100) / 100;
+
+          this.finalZoomSlider.value = nextZoom;
+          if (this.finalZoomVal) {
+            this.finalZoomVal.textContent = `${Math.round(nextZoom * 100)}%`;
+          }
+          this.updatePreviewZoom(nextZoom);
+        }
+      }, { passive: false });
+    }
+
+    // 鍵盤快速鍵 (⌘P / Ctrl+P 或 ⌘S / Ctrl+S 統一導出 PDF，輸入文字時防衝突)
     window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (!isMod) return;
+
+      const key = e.key.toLowerCase();
+      const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+
+      if (key === 'p') {
         e.preventDefault();
-        this.triggerPrint();
+        this.handleExportVectorPdf();
+      } else if (key === 's') {
+        e.preventDefault();
+        if (!isTyping) {
+          this.handleExportVectorPdf();
+        }
       }
     });
+  }
+
+  /**
+   * 輕量防抖工具函式
+   */
+  debounce(fn, delay = 350) {
+    let timer = null;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
   }
 
   /**
@@ -300,9 +395,24 @@ class TENoterWizardApp {
     if (stepNumber === 2) {
       this.renderSlideSelector();
     } else if (stepNumber === 3) {
-      this.generateVocabularyList();
+      // 若在 STEP 2 變更過投影片挑選且尚未手動貼上外部 AI，自動依最新挑選重新萃取
+      if (this.slidesSelectionDirty && !this.isCustomVocab) {
+        const activeSlides = this.getActiveSlides();
+        this.state.vocabList = this.searchEngine.extractVocabulary(activeSlides, 70);
+        this.renderVocabTags();
+      } else {
+        this.generateVocabularyList();
+      }
     } else if (stepNumber === 4) {
-      this.generateQuickRefList();
+      // 若在 STEP 2 變更過挑選且尚未手動貼上外部 AI，自動依最新挑選重新萃取
+      if (this.slidesSelectionDirty && !this.isCustomKeypoints) {
+        const activeSlides = this.getActiveSlides();
+        this.state.keyPointsList = this.searchEngine.extractSlideKeyPoints(activeSlides);
+        this.renderQuickRefPreview();
+        this.slidesSelectionDirty = false;
+      } else {
+        this.generateQuickRefList();
+      }
     } else if (stepNumber === 6) {
       this.compileFinalDocument();
     }
@@ -315,8 +425,8 @@ class TENoterWizardApp {
     }
 
     if (this.currentStep === 6) {
-      // 在最後一步點擊下一步直接列印
-      this.triggerPrint();
+      // 在最後一步點擊下一步直接導出高畫質向量 PDF
+      this.handleExportVectorPdf();
       return;
     }
 
@@ -347,8 +457,8 @@ class TENoterWizardApp {
 
     if (this.currentStep === 6) {
       this.btnNextStep.innerHTML = `
-        <span>立即列印 / 另存 PDF</span>
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        <span>導出高畫質 PDF</span>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
       `;
     } else {
       this.btnNextStep.innerHTML = `
@@ -407,7 +517,10 @@ class TENoterWizardApp {
       appendixSheetsCount += Math.ceil(this.state.keyPointsList.length / 114);
     }
     if (this.state.enableCustomNotes && this.state.customNotesText.trim().length > 0) {
-      appendixSheetsCount += this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText).length;
+      appendixSheetsCount += this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText, {
+        cols: this.state.notesCols || 3,
+        enableMemoGrid: this.state.enableNotesMemoGrid !== false
+      }).length;
     }
 
     const totalSheets = slideSheets + appendixSheetsCount;
@@ -527,6 +640,8 @@ class TENoterWizardApp {
         slide.excluded = !slide.excluded;
         card.classList.toggle('excluded', slide.excluded);
         card.querySelector('.slide-card-action').textContent = slide.excluded ? '點擊加入' : '點擊剔除';
+        this.slidesSelectionDirty = true;
+        this.syncExcludedWithKeypoints();
         this.updateStep2Summary();
         this.updateStats();
       });
@@ -539,14 +654,30 @@ class TENoterWizardApp {
 
   setAllSlidesExcluded(excluded) {
     this.pdfLoader.slides.forEach(s => s.excluded = excluded);
+    this.slidesSelectionDirty = true;
+    this.syncExcludedWithKeypoints();
     this.renderSlideSelector();
     this.updateStats();
   }
 
   invertSlidesExcluded() {
     this.pdfLoader.slides.forEach(s => s.excluded = !s.excluded);
+    this.slidesSelectionDirty = true;
+    this.syncExcludedWithKeypoints();
     this.renderSlideSelector();
     this.updateStats();
+  }
+
+  syncExcludedWithKeypoints() {
+    if (!this.state.keyPointsList || this.state.keyPointsList.length === 0) return;
+    const excludedSet = new Set(this.pdfLoader.slides.filter(s => s.excluded).map(s => s.originalIndex));
+    this.state.keyPointsList.forEach(kp => {
+      if (!kp.isSpan && kp.slideNum && excludedSet.has(kp.slideNum)) {
+        kp.isExcluded = true;
+      } else {
+        kp.isExcluded = false;
+      }
+    });
   }
 
   filterSlideCards(query) {
@@ -699,6 +830,7 @@ class TENoterWizardApp {
     if (parsed.terms && parsed.terms.length > 0) {
       parsed.terms.sort((a, b) => (a.term || '').localeCompare(b.term || '', 'en', { sensitivity: 'base', numeric: true }));
       this.state.vocabList = parsed.terms;
+      this.isCustomVocab = true;
       this.renderVocabTags();
     }
 
@@ -709,6 +841,8 @@ class TENoterWizardApp {
         return a.isSpan ? -1 : 1;
       });
       this.state.keyPointsList = parsed.keypoints;
+      this.isCustomKeypoints = true;
+      this.syncExcludedWithKeypoints();
       this.renderQuickRefPreview();
       this.showToast(`🎉 已自動同步辨識：${parsed.terms.length} 個詞彙 (A-Z排序) + ${parsed.keypoints.length} 條考點 (頁碼排序)！`);
     }
@@ -726,7 +860,9 @@ class TENoterWizardApp {
 
     if (!this.state.keyPointsList || this.state.keyPointsList.length === 0) {
       this.state.keyPointsList = this.searchEngine.extractSlideKeyPoints(activeSlides);
+      this.isCustomKeypoints = false;
     }
+    this.syncExcludedWithKeypoints();
     this.renderQuickRefPreview();
   }
 
@@ -734,10 +870,21 @@ class TENoterWizardApp {
     if (!this.quickRefPreviewContainer) return;
     this.quickRefPreviewContainer.innerHTML = '';
 
+    if (this.quickRefCount) {
+      const activeCount = this.state.keyPointsList.filter(k => !k.isExcluded).length;
+      this.quickRefCount.textContent = activeCount;
+    }
+
     this.state.keyPointsList.forEach(kp => {
+      // 若該單一投影片已在 STEP 2 被剔除，預覽加上半透明標籤以直觀反饋
       const row = document.createElement('div');
       const isSpan = kp.isSpan || (kp.pageStr && kp.pageStr.includes('-'));
-      row.className = `quick-ref-row ${isSpan ? 'quick-ref-span-row' : ''}`;
+      row.className = `quick-ref-row ${isSpan ? 'quick-ref-span-row' : ''} ${kp.isExcluded ? 'quickref-excluded-row' : ''}`;
+      if (kp.isExcluded) {
+        row.style.opacity = '0.4';
+        row.title = '此頁面已在步驟 2 剔除，不會輸出於最終 A4 附錄中';
+      }
+
       const pageDisplay = kp.pageStr || (kp.slideNum ? `#${kp.slideNum}` : '');
 
       let tagHtml = '';
@@ -751,9 +898,11 @@ class TENoterWizardApp {
         tagHtml = `<span class="quickref-tag ${tagClass}">[${t}]</span>`;
       }
 
+      const excludedBadge = kp.isExcluded ? '<span style="font-size:0.7em; color:#ef4444; margin-left:4px;">(已剔除)</span>' : '';
+
       row.innerHTML = `
         <span class="quick-ref-page" style="${isSpan ? 'font-weight:bold; color:#0f172a;' : ''}">${pageDisplay}</span>
-        <span class="quick-ref-title" style="${isSpan ? 'font-weight:600;' : ''}">${tagHtml}${kp.title || kp.fullTitle}</span>
+        <span class="quick-ref-title" style="${isSpan ? 'font-weight:600;' : ''}">${tagHtml}${kp.title || kp.fullTitle}${excludedBadge}</span>
       `;
       this.quickRefPreviewContainer.appendChild(row);
     });
@@ -766,6 +915,9 @@ class TENoterWizardApp {
     this.finalPrintContainer.innerHTML = '';
     const activeSlides = this.getActiveSlides();
     if (activeSlides.length === 0) return;
+
+    // 同步剔除狀態
+    this.syncExcludedWithKeypoints();
 
     // 套用目前設定之縮放比例
     const currentZoom = this.finalZoomSlider ? parseFloat(this.finalZoomSlider.value) : 0.75;
@@ -799,25 +951,52 @@ class TENoterWizardApp {
       vocabSheets.forEach(sheet => this.finalPrintContainer.appendChild(sheet));
     }
 
-    // 3. 附錄：逐頁考點速查目錄 (如果啟用，支援多頁自動分頁防溢出)
+    // 3. 附錄：逐頁考點速查目錄 (如果啟用，支援多頁自動分頁防溢出，排除剔除頁)
     if (this.state.enableQuickRef && this.state.keyPointsList.length > 0) {
       const quickRefSheets = this.searchEngine.createQuickRefPrintSheets(this.state.keyPointsList);
       quickRefSheets.forEach(sheet => this.finalPrintContainer.appendChild(sheet));
     }
 
-    // 4. 附錄：外部 AI 自訂筆記 (如果啟用且有內容，支援多頁)
-    if (this.state.enableCustomNotes && this.state.customNotesText.trim() !== '') {
-      const notesSheets = this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText);
+    // 4. 附錄：外部 AI 自訂筆記 (如果啟用且有內容，支援多頁自動分頁與備忘網格)
+    const customNotes = (this.customNotesInput ? this.customNotesInput.value : this.state.customNotesText || '').trim();
+    if (this.state.enableCustomNotes && customNotes !== '') {
+      const notesSheets = this.searchEngine.createCustomNotesPrintSheets(customNotes, {
+        cols: this.state.notesCols || 3,
+        enableMemoGrid: this.state.enableNotesMemoGrid !== false
+      });
       notesSheets.forEach(sheet => this.finalPrintContainer.appendChild(sheet));
     }
+
+    // 5. 確保套用縮放比例與邊界補償
+    this.updatePreviewZoom(currentZoom);
   }
 
   /**
-   * 觸發列印或另存為 PDF
+   * 更新 A4 預覽縮放比例並補償容器高度
+   * 使用 transform: scale 實現純 GPU 幾何縮放，徹底避免 CSS 欄位與排版 Reflow 跑版
+   * 同時動態調整 margin-bottom 負值以消除縮放帶來的留白或溢出
+   * @param {number} zoom 縮放比例 (例如 0.75)
+   */
+  updatePreviewZoom(zoom) {
+    if (!this.finalPrintContainer) return;
+    this.finalPrintContainer.style.setProperty('--preview-zoom', zoom);
+
+    // 計算未縮放佈局高度並以 margin-bottom 補償外層滾動條
+    requestAnimationFrame(() => {
+      if (!this.finalPrintContainer) return;
+      const naturalHeight = this.finalPrintContainer.offsetHeight;
+      if (naturalHeight > 0) {
+        const heightDifference = naturalHeight * (zoom - 1);
+        this.finalPrintContainer.style.marginBottom = `${heightDifference}px`;
+      }
+    });
+  }
+
+  /**
+   * 觸發 PDF 導出
    */
   triggerPrint() {
-    this.compileFinalDocument();
-    window.print();
+    this.handleExportVectorPdf();
   }
 
   /**
@@ -834,6 +1013,9 @@ class TENoterWizardApp {
       this.showToast('⚠️ 未選取任何投影片');
       return;
     }
+
+    // 同步剔除狀態
+    this.syncExcludedWithKeypoints();
 
     const btn = this.btnExportVectorPdf;
     const origHtml = btn ? btn.innerHTML : '';
@@ -861,8 +1043,12 @@ class TENoterWizardApp {
         const qSheets = this.searchEngine.createQuickRefPrintSheets(this.state.keyPointsList);
         appendixSheets.push(...qSheets);
       }
-      if (this.state.enableCustomNotes && this.state.customNotesText.trim() !== '') {
-        const nSheets = this.searchEngine.createCustomNotesPrintSheets(this.state.customNotesText);
+      const customNotes = (this.customNotesInput ? this.customNotesInput.value : this.state.customNotesText || '').trim();
+      if (this.state.enableCustomNotes && customNotes !== '') {
+        const nSheets = this.searchEngine.createCustomNotesPrintSheets(customNotes, {
+          cols: this.state.notesCols || 3,
+          enableMemoGrid: this.state.enableNotesMemoGrid !== false
+        });
         appendixSheets.push(...nSheets);
       }
 
@@ -872,8 +1058,8 @@ class TENoterWizardApp {
         {
           cols: this.state.cols,
           rows: this.state.rows,
-          marginMm: 5, // 5mm 安全邊距，杜絕印表機遮邊
-          gapMm: this.state.gapMm || 1,
+          marginMm: this.state.marginMm || 4.0, // 與預覽保持 100% 絕對一致
+          gapMm: this.state.gapMm || 1.5,       // 與預覽保持 100% 絕對一致
           showBadge: this.state.showBadge,
           showBorder: this.state.showBorder
         },
@@ -894,10 +1080,10 @@ class TENoterWizardApp {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      this.showToast('🎉 標準向量 PDF 導出成功！已自動下載，可直接列印零裁切！');
+      this.showToast('🎉 標準向量 PDF 導出成功！已自動下載！');
     } catch (err) {
       console.error('匯出向量 PDF 失敗:', err);
-      this.showToast(`❌ 匯出失敗: ${err.message || '請改用系統列印'}`);
+      this.showToast(`❌ 導出失敗: ${err.message || '請確認檔案內容'}`);
     } finally {
       if (btn) {
         btn.disabled = false;

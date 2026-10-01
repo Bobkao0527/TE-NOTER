@@ -450,39 +450,93 @@ export class LayoutEngine {
           const numStr = numEl ? numEl.textContent.trim() : `#${idx + 1}`;
           const titleStr = titleEl ? titleEl.textContent.trim() : item.textContent.trim();
 
-          // 頁碼 (若是主題區間，使用加粗黑色強調)
           const isSpan = numStr.includes('-');
-          ctx.fillStyle = isSpan ? '#0f172a' : '#1e40af';
+
+          // 測量頁碼寬度
           ctx.font = 'bold 26px "JetBrains Mono", monospace';
-          ctx.fillText(numStr, x, y + 36);
-
           const numWidth = ctx.measureText(numStr).width;
-          const titleOffsetX = Math.max(125, numWidth + 15);
+          const titleOffsetX = Math.max(120, Math.ceil(numWidth) + 14);
 
-          // 考點標題 (完整呈現，若為主題則加粗)
-          ctx.fillStyle = isSpan ? '#000000' : '#1e293b';
-          ctx.font = isSpan ? 'bold 25px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif' : '500 24px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+          // 考點標題多行折行計算 (100% 完整換行呈現，絕不草率截斷成 ...)
+          const maxTitleWidth = colWidth - titleOffsetX - 8;
+          let fontSize = 23;
+          ctx.font = `${isSpan ? 'bold' : '500'} ${fontSize}px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif`;
 
-          const maxTitleWidth = colWidth - titleOffsetX - 10;
-          let drawTitle = titleStr;
-          if (ctx.measureText(drawTitle).width > maxTitleWidth) {
-            ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
-            if (ctx.measureText(drawTitle).width > maxTitleWidth) {
-              while (drawTitle.length > 0 && ctx.measureText(drawTitle + '...').width > maxTitleWidth) {
-                drawTitle = drawTitle.slice(0, -1);
-              }
-              drawTitle += '...';
+          const chars = Array.from(titleStr);
+          let line1 = '';
+          let line2 = '';
+
+          for (let i = 0; i < chars.length; i++) {
+            const char = chars[i];
+            if (!line2 && ctx.measureText(line1 + char).width <= maxTitleWidth) {
+              line1 += char;
+            } else {
+              line2 += char;
             }
           }
-          ctx.fillText(drawTitle, x + titleOffsetX, y + 36);
 
-          // 底部細點線
+          // 若第二行文字極長，動態微調字型以保證容納全部內容
+          if (line2 && ctx.measureText(line2).width > maxTitleWidth) {
+            fontSize = 20;
+            ctx.font = `${isSpan ? 'bold' : '500'} ${fontSize}px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif`;
+            line1 = '';
+            line2 = '';
+            for (let i = 0; i < chars.length; i++) {
+              const char = chars[i];
+              if (!line2 && ctx.measureText(line1 + char).width <= maxTitleWidth) {
+                line1 += char;
+              } else {
+                line2 += char;
+              }
+            }
+
+            // 極限情況下 (如超過 55 字) 使用 18px 容納
+            if (line2 && ctx.measureText(line2).width > maxTitleWidth) {
+              fontSize = 18;
+              ctx.font = `${isSpan ? 'bold' : '500'} ${fontSize}px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif`;
+              line1 = '';
+              line2 = '';
+              for (let i = 0; i < chars.length; i++) {
+                const char = chars[i];
+                if (!line2 && ctx.measureText(line1 + char).width <= maxTitleWidth) {
+                  line1 += char;
+                } else {
+                  line2 += char;
+                }
+              }
+            }
+          }
+
+          const hasLine2 = Boolean(line2 && line2.trim().length > 0);
+          const firstLineBaseline = hasLine2 ? y + 29 : y + 43;
+
+          // 繪製頁碼標籤 (若是跨度區間則加上加深底色標籤)
+          if (isSpan) {
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(x - 4, firstLineBaseline - 24, numWidth + 8, 30);
+            ctx.fillStyle = '#0f172a';
+          } else {
+            ctx.fillStyle = '#1e40af';
+          }
+          ctx.font = 'bold 25px "JetBrains Mono", monospace';
+          ctx.fillText(numStr, x, firstLineBaseline);
+
+          // 繪製考點標題 (第一行與折行之第二行)
+          ctx.fillStyle = isSpan ? '#000000' : '#1e293b';
+          ctx.font = `${isSpan ? 'bold' : '500'} ${fontSize}px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif`;
+          ctx.fillText(line1, x + titleOffsetX, firstLineBaseline);
+
+          if (hasLine2) {
+            ctx.fillText(line2, x + titleOffsetX, y + 57);
+          }
+
+          // 底部細點線 (留給兩行充足空間，置於 y + 70)
           ctx.strokeStyle = '#cbd5e1';
           ctx.lineWidth = 1.2;
           ctx.setLineDash([3, 3]);
           ctx.beginPath();
-          ctx.moveTo(x, y + 54);
-          ctx.lineTo(x + colWidth, y + 54);
+          ctx.moveTo(x, y + 70);
+          ctx.lineTo(x + colWidth, y + 70);
           ctx.stroke();
           ctx.setLineDash([]);
         });
@@ -544,46 +598,43 @@ export class LayoutEngine {
 
       } else {
         // === 外部自訂筆記 (支援 Markdown & KaTeX 公式 3 欄排版) ===
-        const mdContainer = sheet.querySelector('.appendix-markdown-content');
-        let renderedViaSvg = false;
+        let renderedSuccessfully = false;
 
-        if (mdContainer && window.Blob && window.URL) {
+        // 優先使用 html2canvas 進行 100% 原始 DOM 精確截圖 (避開 SVG 沙盒 Tainted Canvas 限制)
+        if (typeof window !== 'undefined' && window.html2canvas) {
           try {
-            // 優先嘗試透過 SVG foreignObject 渲染出最高還原度的 Markdown 與 KaTeX 公式
-            const serialized = new XMLSerializer().serializeToString(sheet);
-            const svgString = `
-              <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-                <foreignObject width="100%" height="100%">
-                  <div xmlns="http://www.w3.org/1999/xhtml" style="background:#ffffff; width:${width}px; height:${height}px; transform: scale(${width / (sheet.offsetWidth || 794)}); transform-origin: 0 0;">
-                    ${serialized}
-                  </div>
-                </foreignObject>
-              </svg>
-            `;
-            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-            const svgUrl = URL.createObjectURL(svgBlob);
-            const img = new Image();
-            await new Promise((resolve, reject) => {
-              img.onload = () => {
-                ctx.drawImage(img, 0, 0, width, height);
-                URL.revokeObjectURL(svgUrl);
-                renderedViaSvg = true;
-                resolve();
-              };
-              img.onerror = () => {
-                URL.revokeObjectURL(svgUrl);
-                reject();
-              };
-              img.src = svgUrl;
+            // 暫時將 sheet 掛載至 document.body (不可見區域) 以保證取得真實 CSS 樣式與 KaTeX 公式幾何
+            const sandbox = document.createElement('div');
+            sandbox.style.cssText = 'position:fixed; left:-9999px; top:-9999px; width:210mm; min-height:297mm; z-index:-9999; background:#ffffff; opacity:0; pointer-events:none;';
+            const cloneSheet = sheet.cloneNode(true);
+            sandbox.appendChild(cloneSheet);
+            document.body.appendChild(sandbox);
+
+            // 使用 html2canvas 渲染高解析度 (scale: 3 約 300DPI 印刷畫質)
+            const renderedCanvas = await window.html2canvas(cloneSheet, {
+              scale: 3,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff',
             });
-          } catch (e) {
-            renderedViaSvg = false;
+
+            if (sandbox.parentNode) {
+              sandbox.parentNode.removeChild(sandbox);
+            }
+
+            if (renderedCanvas) {
+              ctx.drawImage(renderedCanvas, 0, 0, width, height);
+              renderedSuccessfully = true;
+            }
+          } catch (h2cErr) {
+            console.warn('html2canvas 渲染提示，改用 Native Canvas Fallback:', h2cErr);
+            renderedSuccessfully = false;
           }
         }
 
-        // 若 SVG 渲染未執行或因瀏覽器安全性限制失敗，使用 Canvas 遍歷各節點進行高可靠度排版繪製
-        if (!renderedViaSvg) {
-          const blocks = sheet.querySelectorAll('.appendix-markdown-content > *') || sheet.querySelectorAll('.appendix-columns-3 > div');
+        // 若 html2canvas 未成功，使用純原生 Canvas 2D 逐區塊無失真排版
+        if (!renderedSuccessfully) {
+          const blocks = sheet.querySelectorAll('.appendix-markdown-content > *');
           const colWidth = 720;
           const colStartX = [110, 875, 1640];
           const startY = 240;
@@ -616,7 +667,7 @@ export class LayoutEngine {
 
             const lineHeight = isPre ? 30 : 34;
             const blockHeight = pLines.length * lineHeight + (isH1 || isH2 ? 22 : 12);
-            if (curY + blockHeight > height - 120) {
+            if (curY + blockHeight > height - 140) {
               curCol++;
               curY = startY;
             }

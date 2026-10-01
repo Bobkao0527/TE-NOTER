@@ -43,8 +43,9 @@ export class PDFLoader {
       const textContent = await page.getTextContent();
       const extractedText = textContent.items.map(item => item.str).join(' ');
 
-      // 高清渲染設定 (scale: 1.6 提供列印時銳利的小字清晰度)
-      const viewport = page.getViewport({ scale: 1.6 });
+      // 畫面縮圖與預覽渲染設定 (scale: 1.0 提供適度清晰度並大幅降低 60% 記憶體佔用，防範 200 頁 OOM)
+      // 導出 PDF 則全面採用 PDF-lib 向量嵌入原始 ArrayBuffer，畫質為 100% 原始向量不受影響
+      const viewport = page.getViewport({ scale: 1.0 });
       const currentRatio = viewport.width / viewport.height;
       ratioSum += currentRatio;
 
