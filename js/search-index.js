@@ -13,7 +13,7 @@ export class SearchIndexEngine {
    */
   buildIndex(slides) {
     this.cachedIndex.clear();
-    
+
     // 常見無實質意義之停用詞
     const stopWords = new Set([
       'the', 'is', 'at', 'which', 'on', 'in', 'a', 'an', 'and', 'or', 'for', 'to', 'of', 'with',
@@ -27,11 +27,11 @@ export class SearchIndexEngine {
 
       // 提取英文專有名詞、大寫縮寫 (如 TCP, BFS, FIFO, RSA, O(n)) 及中文詞彙 (2~5 字)
       const tokens = slide.text.match(/[A-Za-z0-9_+-]{2,}|\b[A-Z]{2,}\b|[\u4e00-\u9fa5]{2,5}/g) || [];
-      
+
       tokens.forEach(token => {
         const cleanToken = token.trim();
         const lowerToken = cleanToken.toLowerCase();
-        
+
         if (stopWords.has(lowerToken) || cleanToken.length < 2) return;
         if (/^\d+$/.test(cleanToken)) return;
 
@@ -355,7 +355,7 @@ ${slidesContent}`;
             pages: item.pages || []
           })).filter(item => item.term || item.zh);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 2. 解析每行文本 (支援 Markdown 表格 "|" 或 ":" 分隔)
@@ -436,7 +436,7 @@ ${slidesContent}`;
    */
   search(query, slides) {
     if (!query || query.trim() === '') return [];
-    
+
     const term = query.trim().toLowerCase();
     const results = [];
 
@@ -449,7 +449,7 @@ ${slidesContent}`;
         const start = Math.max(0, matchPos - 30);
         const end = Math.min(slide.text.length, matchPos + term.length + 50);
         let snippet = slide.text.substring(start, end);
-        
+
         const reg = new RegExp(`(${query})`, 'gi');
         snippet = snippet.replace(reg, '<mark>$1</mark>');
 
@@ -636,10 +636,147 @@ ${slidesContent}`;
   }
 
   /**
-   * 智慧修復 OCR 雜訊、字元間空格、破損 LaTeX 下標與反斜線，並自動標註未包裹之數學公式
-   * @param {string} raw 
-   * @returns {string} 修復正規化後的 Markdown & LaTeX 文字
+   * 智慧修復被換行與空行割裂的 Markdown 表格 (如 AI 輸出或富文本複製造成的碎片化表格)
+   * 將多行單元格、中斷的表頭與分隔線重組為合法的 GitHub Flavored Markdown (GFM) 單行表格列
+   * @param {string} text 原始文字
+   * @returns {string} 修復後的 Markdown 文字
    */
+  repairBrokenMarkdownTables(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    const lines = text.split('\n');
+    const result = [];
+    let tableBuffer = [];
+    let inTableSection = false;
+    let inCodeBlock = false;
+
+    const isTableLine = (l) => {
+      const t = l.trim();
+      return t.includes('|');
+    };
+
+    const isSeparatorLine = (l) => {
+      return /^\|?\s*:?-+[-:\s|]*\|/.test(l.trim());
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // 代碼區塊 (```) 內部的內容不進行表格修復
+      if (trimmed.startsWith('```')) {
+        if (inTableSection) {
+          result.push(...this.flushBrokenTableBuffer(tableBuffer));
+          tableBuffer = [];
+          inTableSection = false;
+        }
+        inCodeBlock = !inCodeBlock;
+        result.push(line);
+        continue;
+      }
+      if (inCodeBlock) {
+        result.push(line);
+        continue;
+      }
+
+      if (inTableSection) {
+        if (trimmed === '') {
+          tableBuffer.push(line);
+        } else if (isTableLine(line)) {
+          tableBuffer.push(line);
+        } else {
+          result.push(...this.flushBrokenTableBuffer(tableBuffer));
+          tableBuffer = [];
+          inTableSection = false;
+          result.push(line);
+        }
+      } else {
+        if (trimmed.startsWith('|') || isSeparatorLine(line)) {
+          inTableSection = true;
+          tableBuffer.push(line);
+        } else {
+          result.push(line);
+        }
+      }
+    }
+
+    if (tableBuffer.length > 0) {
+      result.push(...this.flushBrokenTableBuffer(tableBuffer));
+    }
+
+    return result.join('\n');
+  }
+
+  /**
+   * 解析並重組暫存區內的碎片化表格列
+   * @param {Array<string>} rawLines 
+   * @returns {Array<string>}
+   */
+  flushBrokenTableBuffer(rawLines) {
+    const nonBlankLines = rawLines.map(l => l.trim()).filter(l => l !== '');
+    if (nonBlankLines.length === 0) return rawLines;
+
+    const hasSeparator = nonBlankLines.some(l => /^\|?\s*:?-+[-:\s|]+$/.test(l));
+    const pipeLinesCount = nonBlankLines.filter(l => l.includes('|')).length;
+
+    // 若未具備表格特徵（無分隔線且少於 2 個包含 pipe 的行），原樣保留
+    if (!hasSeparator && pipeLinesCount < 2) {
+      return rawLines;
+    }
+
+    const reconstructedRows = [];
+    let currentRowParts = [];
+
+    for (let i = 0; i < nonBlankLines.length; i++) {
+      const cur = nonBlankLines[i];
+      const isSep = /^\|?\s*:?-+[-:\s|]+$/.test(cur);
+
+      if (isSep) {
+        if (currentRowParts.length > 0) {
+          reconstructedRows.push(this.assembleTableRow(currentRowParts));
+          currentRowParts = [];
+        }
+        let sep = cur;
+        if (!sep.startsWith('|')) sep = '| ' + sep;
+        if (!sep.endsWith('|')) sep = sep + ' |';
+        reconstructedRows.push(sep);
+        continue;
+      }
+
+      currentRowParts.push(cur);
+
+      const next = nonBlankLines[i + 1];
+      const nextIsSep = next && /^\|?\s*:?-+[-:\s|]+$/.test(next);
+
+      if (cur === '|' || nextIsSep) {
+        reconstructedRows.push(this.assembleTableRow(currentRowParts));
+        currentRowParts = [];
+      } else if (cur.endsWith('|') && next && next.startsWith('|') && (cur.match(/\|/g) || []).length >= 2) {
+        reconstructedRows.push(this.assembleTableRow(currentRowParts));
+        currentRowParts = [];
+      }
+    }
+
+    if (currentRowParts.length > 0) {
+      reconstructedRows.push(this.assembleTableRow(currentRowParts));
+    }
+
+    return reconstructedRows;
+  }
+
+  /**
+   * 將拆分的單元格片段整合成標準的單行 Markdown 表格列
+   * @param {Array<string>} parts 
+   * @returns {string}
+   */
+  assembleTableRow(parts) {
+    let combined = parts.join(' ').replace(/\s+/g, ' ').trim();
+    if (!combined.startsWith('|')) combined = '| ' + combined;
+    if (!combined.endsWith('|')) combined = combined + ' |';
+    combined = combined.replace(/\|\s*\|\s*$/, '|');
+    return combined;
+  }
+
   /**
    * 智慧修復 OCR 雜訊、字元間空格、破損 LaTeX 下標與反斜線，並自動標註未包裹之數學公式與 Markdown 清單/表格
    * @param {string} raw 
@@ -685,7 +822,10 @@ ${slidesContent}`;
     // 6. 清單項目符號標準化：將每行開頭的 ⚬ (U+26AC) 智慧轉換為標準 Markdown 清單符號 - 
     text = text.replace(/^(\s*)⚬\s+/gm, '$1- ');
 
-    // 7. TSV (Tab 分隔表格) 智慧轉換為 GitHub Flavored Markdown (GFM) 表格
+    // 7. 修復被換行與空行割裂的 Markdown 表格 (如 AI 輸出或富文本複製造成的碎片化表格)
+    text = this.repairBrokenMarkdownTables(text);
+
+    // 8. TSV (Tab 分隔表格) 智慧轉換為 GitHub Flavored Markdown (GFM) 表格
     const rawLines = text.split('\n');
     const mergedLines = [];
     for (let i = 0; i < rawLines.length; i++) {
@@ -856,16 +996,24 @@ ${slidesContent}`;
     const mathTokens = [];
     let text = normalizedText;
 
-    // 獨立區塊公式: $$ ... $$ 或 \[ ... \]
-    text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+    // 獨立區塊公式: $$ ... $$ 或 \[ ... \] (若處於表格行內則不插入換行，避免打斷表格語法)
+    text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula, offset, str) => {
       const token = `KATEXBLOCKTOKEN${mathTokens.length}ENDTOKEN`;
       mathTokens.push({ type: 'block', formula: formula.trim() });
-      return `\n\n${token}\n\n`;
+      const lineStart = str.lastIndexOf('\n', offset) + 1;
+      const nextNewline = str.indexOf('\n', offset + match.length);
+      const lineEnd = nextNewline === -1 ? str.length : nextNewline;
+      const fullLine = str.substring(lineStart, lineEnd);
+      return fullLine.includes('|') ? ` ${token} ` : `\n\n${token}\n\n`;
     });
-    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (match, formula) => {
+    text = text.replace(/\\\[([\s\S]*?)\\\]/g, (match, formula, offset, str) => {
       const token = `KATEXBLOCKTOKEN${mathTokens.length}ENDTOKEN`;
       mathTokens.push({ type: 'block', formula: formula.trim() });
-      return `\n\n${token}\n\n`;
+      const lineStart = str.lastIndexOf('\n', offset) + 1;
+      const nextNewline = str.indexOf('\n', offset + match.length);
+      const lineEnd = nextNewline === -1 ? str.length : nextNewline;
+      const fullLine = str.substring(lineStart, lineEnd);
+      return fullLine.includes('|') ? ` ${token} ` : `\n\n${token}\n\n`;
     });
 
     // 行內公式: $ ... $ 或 \( ... \)
@@ -975,7 +1123,10 @@ ${slidesContent}`;
         }
       } else if (tag === 'table') {
         const thead = b.querySelector('thead');
-        const trs = Array.from(b.querySelectorAll('tbody tr') || b.querySelectorAll('tr'));
+        let trs = Array.from(b.querySelectorAll('tbody tr'));
+        if (trs.length === 0) {
+          trs = Array.from(b.querySelectorAll('tr')).filter(tr => !tr.closest('thead'));
+        }
         if (trs.length > 8) {
           const chunkSize = 5;
           for (let i = 0; i < trs.length; i += chunkSize) {
