@@ -1425,7 +1425,121 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 1.1rem;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.timeline-stats-card + .timeline-stats-card {
+  margin-top: 0.85rem;
+}
+
+/* 計中費用試算專用樣式 */
+.timeline-pricing-card {
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.pricing-tag-pill {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 2px 7px;
+  border-radius: 9999px;
+  letter-spacing: -0.01em;
+}
+
+.pricing-table-wrap {
+  width: 100%;
+  margin-top: 0.35rem;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pricing-table th {
+  text-align: right;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pricing-table th:first-child {
+  text-align: left;
+  padding-left: 0.1rem;
+}
+
+.pricing-table td {
+  padding: 0.4rem 0.4rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.pricing-table tr:last-child td {
+  border-bottom: none;
+}
+
+.pricing-cell-type {
+  text-align: left !important;
+  padding-left: 0.1rem !important;
+}
+
+.pricing-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.bw-tag {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.color-tag {
+  color: #f472b6;
+  background: rgba(244, 114, 182, 0.15);
+  border: 1px solid rgba(244, 114, 182, 0.3);
+}
+
+.pricing-val {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.pricing-val.highlight-green {
+  color: #34d399;
+}
+
+.pricing-val.highlight-cyan {
+  color: #38bdf8;
+}
+
+.pricing-footnote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 0.5rem;
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  border-top: 1px dashed rgba(255, 255, 255, 0.07);
+  padding-top: 0.4rem;
 }
 
 .stats-card-header {

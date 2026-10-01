@@ -74,6 +74,13 @@ class TENoterWizardApp {
     this.sideStatPercentText = document.getElementById('sideStatPercentText');
     this.timelineStep1Sub = document.getElementById('timelineStep1Sub');
 
+    // 計中費用試算元素
+    this.costBwSingle = document.getElementById('costBwSingle');
+    this.costBwDouble = document.getElementById('costBwDouble');
+    this.costColorSingle = document.getElementById('costColorSingle');
+    this.costColorDouble = document.getElementById('costColorDouble');
+    this.sidePricingPaperCount = document.getElementById('sidePricingPaperCount');
+
     // STEP 1 元素
     this.dropZone = document.getElementById('dropZone');
     this.pdfFileInput = document.getElementById('pdfFileInput');
@@ -502,6 +509,7 @@ class TENoterWizardApp {
       if (this.sideStatSavingsBadge) this.sideStatSavingsBadge.textContent = `省紙 0%`;
       if (this.sideStatFillBar) this.sideStatFillBar.style.width = `0%`;
       if (this.sideStatPercentText) this.sideStatPercentText.textContent = `省紙 0%`;
+      this.updatePricingStats(0);
       return;
     }
 
@@ -529,6 +537,9 @@ class TENoterWizardApp {
     this.sideStatPapers.textContent = `${totalSheets} 面 (${doubleSheets} 張雙面)`;
     this.sideStatLayout.textContent = `直式 ${this.state.cols}×${this.state.rows}`;
 
+    // 更新計中費用試算
+    this.updatePricingStats(totalSheets);
+
     // 省紙效益計算：原始簡報雙面列印張數 vs 紙本資料雙面列印張數
     const originalDoubleSheets = Math.ceil(activeCount / 2);
     const savedSheets = Math.max(0, originalDoubleSheets - doubleSheets);
@@ -547,6 +558,63 @@ class TENoterWizardApp {
     if (this.sideStatFillBar) {
       this.sideStatFillBar.style.width = `${savingsPct}%`;
     }
+  }
+
+  /**
+   * 更新計中費用試算 (黑白單面/雙面、彩色單面/雙面)
+   * 費率：黑白單面 1元/面、雙面 1.5元/張；彩色單面 5元/面、雙面 7.5元/張
+   */
+  updatePricingStats(totalSheets) {
+    if (!this.costBwSingle || !this.costBwDouble || !this.costColorSingle || !this.costColorDouble) {
+      return;
+    }
+
+    if (totalSheets <= 0) {
+      this.costBwSingle.textContent = '0 元';
+      this.costBwDouble.textContent = '0 元';
+      this.costColorSingle.textContent = '0 元';
+      this.costColorDouble.textContent = '0 元';
+      if (this.sidePricingPaperCount) {
+        this.sidePricingPaperCount.textContent = '0 面';
+      }
+      return;
+    }
+
+    // 單面列印：一面黑白 1 元、彩色 5 元
+    const bwSingle = totalSheets * 1;
+    const colorSingle = totalSheets * 5;
+
+    // 雙面列印：雙面每張黑白 1.5 元、彩色 7.5 元；若總面數為奇數，末頁單面按單面費率計
+    const fullDoubleSheets = Math.floor(totalSheets / 2);
+    const hasOddPage = totalSheets % 2 === 1;
+    const bwDouble = fullDoubleSheets * 1.5 + (hasOddPage ? 1 : 0);
+    const colorDouble = fullDoubleSheets * 7.5 + (hasOddPage ? 5 : 0);
+
+    const formatVal = (num) => (Number.isInteger(num) ? `${num} 元` : `${num.toFixed(1)} 元`);
+
+    this.costBwSingle.textContent = formatVal(bwSingle);
+    this.costBwDouble.textContent = formatVal(bwDouble);
+    this.costColorSingle.textContent = formatVal(colorSingle);
+    this.costColorDouble.textContent = formatVal(colorDouble);
+
+    const doubleSheets = Math.ceil(totalSheets / 2);
+    if (this.sidePricingPaperCount) {
+      this.sidePricingPaperCount.textContent = `${totalSheets} 面 (${doubleSheets} 張雙面)`;
+    }
+
+    // 懸浮詳細算式說明
+    const doubleDetailBW = hasOddPage
+      ? `${fullDoubleSheets} 張雙面×1.5元 + 1頁單面×1元 = ${bwDouble} 元`
+      : `${fullDoubleSheets} 張雙面 × 1.5 元 = ${bwDouble} 元`;
+
+    const doubleDetailColor = hasOddPage
+      ? `${fullDoubleSheets} 張雙面×7.5元 + 1頁單面×5元 = ${colorDouble} 元`
+      : `${fullDoubleSheets} 張雙面 × 7.5 元 = ${colorDouble} 元`;
+
+    this.costBwSingle.title = `黑白單面：${totalSheets} 面 × 1 元 = ${bwSingle} 元`;
+    this.costBwDouble.title = `黑白雙面：${doubleDetailBW}`;
+    this.costColorSingle.title = `彩色單面：${totalSheets} 面 × 5 元 = ${colorSingle} 元`;
+    this.costColorDouble.title = `彩色雙面：${doubleDetailColor}`;
   }
 
   /**

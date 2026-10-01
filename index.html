@@ -514,6 +514,45 @@
         </div>
       </nav>
 
+      <!-- 計中費用試算小卡 -->
+      <div class="timeline-stats-card timeline-pricing-card">
+        <div class="stats-card-header">
+          <h4 class="stats-card-title">🖨️ 計中費用試算</h4>
+          <span id="sidePricingPaperCount" class="pricing-tag-pill">0 面</span>
+        </div>
+        <div class="pricing-table-wrap">
+          <table class="pricing-table">
+            <thead>
+              <tr>
+                <th class="col-type">模式</th>
+                <th class="col-single">單面</th>
+                <th class="col-double">雙面</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="pricing-cell-type">
+                  <span class="pricing-tag bw-tag">黑白</span>
+                </td>
+                <td id="costBwSingle" class="pricing-val">0 元</td>
+                <td id="costBwDouble" class="pricing-val highlight-green">0 元</td>
+              </tr>
+              <tr>
+                <td class="pricing-cell-type">
+                  <span class="pricing-tag color-tag">彩色</span>
+                </td>
+                <td id="costColorSingle" class="pricing-val">0 元</td>
+                <td id="costColorDouble" class="pricing-val highlight-cyan">0 元</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pricing-footnote">
+          <span>* 黑白：單面 1元 / 雙面 1.5元</span>
+          <span>* 彩色：單面 5元 / 雙面 7.5元</span>
+        </div>
+      </div>
+
       <!-- 即時效益統計小卡 -->
       <div class="timeline-stats-card">
         <div class="stats-card-header">
