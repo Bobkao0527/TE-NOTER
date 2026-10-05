@@ -27,6 +27,7 @@ class TENoterWizardApp {
       gapMm: 1.5,
       showBadge: true,
       showBorder: true,
+      preserveAnnotations: false,
       inkSaver: false,
       enableVocab: true,
       enableQuickRef: true,
@@ -135,6 +136,7 @@ class TENoterWizardApp {
     this.chkFinalBadge = document.getElementById('chkFinalBadge');
     this.chkFinalBorder = document.getElementById('chkFinalBorder');
     this.chkFinalInkSaver = document.getElementById('chkFinalInkSaver');
+    this.chkFinalPreserveAnnotations = document.getElementById('chkFinalPreserveAnnotations');
     this.finalZoomSlider = document.getElementById('finalZoomSlider');
     this.finalZoomVal = document.getElementById('finalZoomVal');
 
@@ -315,6 +317,17 @@ class TENoterWizardApp {
         this.showToast('💡 已套用黑白高對比預覽模式');
       }
     });
+
+    if (this.chkFinalPreserveAnnotations) {
+      this.chkFinalPreserveAnnotations.addEventListener('change', (e) => {
+        this.state.preserveAnnotations = e.target.checked;
+        if (this.state.preserveAnnotations) {
+          this.showToast('✍️ 導出模式已切換為：保留手寫筆記 (300 DPI 高畫質)');
+        } else {
+          this.showToast('⚡ 導出模式已切換為：純向量直出模式');
+        }
+      });
+    }
 
     // STEP 6: A4 預覽縮放滑桿 (採用幾何縮放與負 margin 補償，完全杜絕 CSS 多欄跑版)
     if (this.finalZoomSlider && this.finalZoomVal) {
@@ -654,6 +667,26 @@ class TENoterWizardApp {
 
       // 更新時間軸
       this.timelineStep1Sub.textContent = `${file.name.substring(0, 16)}... (${result.totalPages}頁)`;
+
+      // 檢查手寫筆記並自動設置
+      if (result.hasHandwritingNotes) {
+        this.state.preserveAnnotations = true;
+        if (this.chkFinalPreserveAnnotations) {
+          this.chkFinalPreserveAnnotations.checked = true;
+        }
+        const badgeEl = document.getElementById('lblFinalPreserveAnnotations');
+        if (badgeEl) {
+          badgeEl.textContent = '✍️ 保留手寫筆記 (已偵測到字跡，300 DPI)';
+          badgeEl.style.fontWeight = '700';
+          badgeEl.style.color = '#38bdf8';
+        }
+        this.showToast('✍️ 偵測到簡報含有手寫筆記/標註，已自動為您啟用「保留手寫筆記」導出模式！');
+      } else {
+        this.state.preserveAnnotations = false;
+        if (this.chkFinalPreserveAnnotations) {
+          this.chkFinalPreserveAnnotations.checked = false;
+        }
+      }
 
       this.maxUnlockedStep = Math.max(this.maxUnlockedStep, 2);
       this.showToast(`🎉 成功載入！已為您自動適配直式 ${this.state.cols}×${this.state.rows} 排版`);
@@ -1120,6 +1153,9 @@ class TENoterWizardApp {
         appendixSheets.push(...nSheets);
       }
 
+      const modeDesc = this.state.preserveAnnotations ? '300 DPI 筆記保留模式' : '純向量模式';
+      this.showToast(`🚀 正在合成標準 PDF (${modeDesc})，預留安全邊距...`);
+
       const pdfBlob = await this.layoutEngine.exportVectorPdf(
         this.pdfLoader.originalArrayBuffer.slice(0),
         activeSlides,
@@ -1129,12 +1165,14 @@ class TENoterWizardApp {
           marginMm: this.state.marginMm || 4.0, // 與預覽保持 100% 絕對一致
           gapMm: this.state.gapMm || 1.5,       // 與預覽保持 100% 絕對一致
           showBadge: this.state.showBadge,
-          showBorder: this.state.showBorder
+          showBorder: this.state.showBorder,
+          preserveAnnotations: this.state.preserveAnnotations
         },
         appendixSheets,
         (current, total, statusText) => {
           this.showToast(`📄 ${statusText}`);
-        }
+        },
+        this.pdfLoader
       );
 
       // 觸發瀏覽器下載

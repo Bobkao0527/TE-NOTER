@@ -211,16 +211,18 @@ export class LayoutEngine {
   }
 
   /**
-   * 使用純前端 PDF-Lib 引擎將原始投影片以 100% 原始向量畫質合成為標準 A4 PDF
-   * 內建 5mm 安全邊距，杜絕印表機遮邊與裁切
+   * 使用純前端 PDF-Lib 引擎將原始投影片合成為標準 A4 PDF
+   * 支援「100% 原始向量模式」或「300 DPI 高畫質保留手寫筆記模式」
+   * 內建安全邊距，杜絕印表機遮邊與裁切
    * @param {ArrayBuffer} sourceArrayBuffer - 原始 PDF 檔案資料
    * @param {Array} slidesList - 已篩選並選取的投影片陣列（含 originalIndex）
-   * @param {Object} config - { cols, rows, showBadge, showBorder, marginMm, gapMm }
+   * @param {Object} config - { cols, rows, showBadge, showBorder, marginMm, gapMm, preserveAnnotations }
    * @param {Array} appendixSheets - 附錄頁的 DOM 元素陣列
    * @param {Function} onProgress - (current, total, statusText)
+   * @param {Object} pdfLoader - PDFLoader 實例（保留筆記模式時提供按需高清渲染）
    * @returns {Blob} 產生的 PDF Blob
    */
-  async exportVectorPdf(sourceArrayBuffer, slidesList, config, appendixSheets = [], onProgress = null) {
+  async exportVectorPdf(sourceArrayBuffer, slidesList, config, appendixSheets = [], onProgress = null, pdfLoader = null) {
     if (!window.PDFLib) {
       throw new Error('PDF-lib 函式庫尚未載入完成，請確認網路連線');
     }
@@ -243,6 +245,7 @@ export class LayoutEngine {
     const rows = config.rows || 6;
     const showBorder = config.showBorder !== false;
     const showBadge = config.showBadge !== false;
+    const preserveAnnotations = Boolean(config.preserveAnnotations && pdfLoader);
 
     // 可用繪製空間
     const availW = a4W - (2 * marginPt) - ((cols - 1) * gapPt);
@@ -253,20 +256,23 @@ export class LayoutEngine {
     const itemsPerPage = cols * rows;
     const totalPages = Math.ceil(slidesList.length / itemsPerPage);
 
-    // 取得欲嵌入投影片之 0-based 頁碼索引
-    const targetIndices = slidesList.map(s => s.originalIndex - 1);
-    const uniqueIndices = [...new Set(targetIndices)];
-
-    if (onProgress) onProgress(0, totalPages, '正在解析並嵌入原始高畫質向量頁面...');
-    const embeddedPagesList = await newPdfDoc.embedPdf(sourceArrayBuffer, uniqueIndices);
-
-    // 建立索引對照表
+    // 向量模式準備：取得欲嵌入投影片之 0-based 頁碼索引
     const embeddedMap = new Map();
-    uniqueIndices.forEach((origIdx, idx) => {
-      embeddedMap.set(origIdx, embeddedPagesList[idx]);
-    });
+    if (!preserveAnnotations) {
+      const targetIndices = slidesList.map(s => s.originalIndex - 1);
+      const uniqueIndices = [...new Set(targetIndices)];
+
+      if (onProgress) onProgress(0, totalPages, '正在解析並嵌入原始高畫質向量頁面...');
+      const embeddedPagesList = await newPdfDoc.embedPdf(sourceArrayBuffer, uniqueIndices);
+
+      // 建立索引對照表
+      uniqueIndices.forEach((origIdx, idx) => {
+        embeddedMap.set(origIdx, embeddedPagesList[idx]);
+      });
+    }
 
     const font = await newPdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const highResJpgMap = new Map(); // 快取已渲染的高清圖片避免重複渲染
 
     // 依序產生每一張實體 A4 頁面
     for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
@@ -301,22 +307,47 @@ export class LayoutEngine {
           });
         }
 
-        // 嵌入原生向量頁面
-        const emb = embeddedMap.get(slide.originalIndex - 1);
-        if (emb) {
-          // 等比例置中縮放 (Fit inside cell)
-          const scale = Math.min(cellW / emb.width, cellH / emb.height);
-          const drawW = emb.width * scale;
-          const drawH = emb.height * scale;
+        // 嵌入投影片頁面（保留手寫筆記 vs 原生向量模式）
+        if (preserveAnnotations) {
+          let imgObj = highResJpgMap.get(slide.originalIndex);
+          if (!imgObj) {
+            if (onProgress) {
+              onProgress(i + 1, slidesList.length, `正在以 300 DPI 渲染第 ${slide.originalIndex} 頁筆記與投影片...`);
+            }
+            const jpgBytes = await pdfLoader.renderPageHighResJpeg(slide.originalIndex);
+            imgObj = await newPdfDoc.embedJpg(jpgBytes);
+            highResJpgMap.set(slide.originalIndex, imgObj);
+          }
+
+          const scale = Math.min(cellW / imgObj.width, cellH / imgObj.height);
+          const drawW = imgObj.width * scale;
+          const drawH = imgObj.height * scale;
           const offsetX = (cellW - drawW) / 2;
           const offsetY = (cellH - drawH) / 2;
 
-          page.drawPage(emb, {
+          page.drawImage(imgObj, {
             x: slotX + offsetX,
             y: slotY + offsetY,
             width: drawW,
             height: drawH,
           });
+        } else {
+          // 純原生向量頁面
+          const emb = embeddedMap.get(slide.originalIndex - 1);
+          if (emb) {
+            const scale = Math.min(cellW / emb.width, cellH / emb.height);
+            const drawW = emb.width * scale;
+            const drawH = emb.height * scale;
+            const offsetX = (cellW - drawW) / 2;
+            const offsetY = (cellH - drawH) / 2;
+
+            page.drawPage(emb, {
+              x: slotX + offsetX,
+              y: slotY + offsetY,
+              width: drawW,
+              height: drawH,
+            });
+          }
         }
 
         // 投影片原頁碼標籤 (右上角)
