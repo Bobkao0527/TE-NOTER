@@ -283,19 +283,27 @@
     column-fill: auto !important;
   }
 
+  /* 外部 AI 筆記頁：邊距須與螢幕預覽一致 (覆蓋 .a4-sheet.print-page 的 4mm)，確保實測分頁結果 1:1 輸出 */
+  .a4-sheet.print-page.appendix-notes-sheet {
+    padding: 8mm 10mm !important;
+  }
+
   .appendix-print-sheet .appendix-markdown-content.full-page {
     height: auto !important;
     min-height: 0 !important;
+    max-height: calc(297mm - 32mm) !important;
   }
 
+  /* 以 flex 撐滿剩餘高度，與螢幕版一致 */
   .appendix-print-sheet .appendix-markdown-content.is-full-sheet {
-    height: 270mm !important;
-    min-height: 270mm !important;
-    max-height: 270mm !important;
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
   }
 
   .appendix-print-sheet .appendix-markdown-content.has-memo {
-    max-height: 200mm !important;
+    max-height: calc(297mm - 75mm) !important;
   }
 
   .appendix-print-sheet .appendix-markdown-content.cols-4 {
@@ -320,7 +328,7 @@
     border-radius: 2mm !important;
     background-color: #ffffff !important;
     flex: 1 !important;
-    min-height: 40mm !important;
+    min-height: 42mm !important;
     max-height: 180mm !important;
     display: flex !important;
     flex-direction: column !important;

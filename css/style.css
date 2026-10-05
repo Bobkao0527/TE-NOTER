@@ -1913,10 +1913,12 @@ body {
 }
 
 /* 強制滿版模式 (非末頁或滿載頁面)：填滿整頁高度，確保 column-fill: auto 從左至右填滿至底，徹底消除底下大空白 */
+/* 以 flex 精準撐滿「紙張高度 - 邊距 - 頁首」的剩餘空間，避免固定高度超出紙張被裁切 */
 .appendix-markdown-content.is-full-sheet {
-  height: calc(297mm - 26mm);
-  min-height: calc(297mm - 26mm);
-  max-height: calc(297mm - 26mm);
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
 }
 
 /* 具有手寫備忘區時，高度自動彈性收縮以留出空間 */

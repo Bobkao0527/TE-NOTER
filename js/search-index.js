@@ -1088,227 +1088,277 @@ ${slidesContent}`;
 
   /**
    * 產生大抄末頁實體列印專用「外部 AI 自訂筆記」A4 紙張節點 (支援多頁自動分頁、Markdown & LaTeX 與手寫備忘網格)
+   *
+   * 分頁演算法 (DOM 實測流式填充)：
+   * 1. 於離屏沙盒中建立與正式輸出「完全相同結構與 CSS」的 A4 紙張，逐一放入區塊。
+   * 2. 以內容末端的哨兵節點 (sentinel) 偵測是否溢出：哨兵跑到最後一欄右側 (多出虛擬欄) 或掉出底部即為溢出。
+   * 3. 溢出時，清單於 li 層級、表格於 tr 層級動態切分，盡可能把當頁填滿；ol 自動延續編號。
+   * 4. 孤兒標題保護：頁尾若殘留標題 (或粗體小標)，整個帶到下一頁。
+   * 5. 末頁依實測結果決定：附手寫備忘區 → 平衡欄 → 滿版。
+   * 取代舊版「字數 × 行高」估算法，杜絕「某頁下方大片空白、某頁尾巴被裁切」的問題。
+   *
    * @param {string} notesText 筆記原始文字
    * @param {Object} options 配置參數 { cols: 3, enableMemoGrid: true }
    * @returns {Array<HTMLElement>}
    */
   createCustomNotesPrintSheets(notesText, options = {}) {
     if (!notesText || notesText.trim() === '') return [];
+    if (typeof document === 'undefined' || !document.body) return [];
 
     const cols = parseInt(options.cols, 10) || 2;
     const enableMemoGrid = options.enableMemoGrid !== false;
+    const colClass = cols === 4 ? 'cols-4' : (cols === 2 ? 'cols-2' : '');
+    const colLabel = cols === 4 ? '4 欄極限微縮' : (cols === 2 ? '2 欄舒適排版' : '3 欄標準高密度');
 
     const fullHtml = this.renderMarkdownAndLatexToHtml(notesText);
 
-    // 解析出頂層 DOM 元素以進行版面高度分組
+    // 解析出頂層 DOM 元素作為流式排版佇列
     const tempContainer = document.createElement('div');
     tempContainer.innerHTML = fullHtml;
-    const childNodes = Array.from(tempContainer.children);
-
-    const rawBlocks = childNodes.length > 0 ? childNodes : [tempContainer];
-
-    // 細粒度元素拆分：
-    // 1. 若 ul/ol 包含超過 4 個 li，以 3 個為一組拆分
-    // 2. 若 table 超過 8 列 tr，以 5 列為一組拆分 (保留 thead)，確保跨欄與分頁平滑自然
-    const blocks = [];
-    rawBlocks.forEach(b => {
-      const tag = b.tagName ? b.tagName.toLowerCase() : '';
-      if ((tag === 'ul' || tag === 'ol') && b.children.length > 4) {
-        const lis = Array.from(b.children);
-        const chunkSize = 3;
-        for (let i = 0; i < lis.length; i += chunkSize) {
-          const subList = document.createElement(tag);
-          lis.slice(i, i + chunkSize).forEach(li => subList.appendChild(li.cloneNode(true)));
-          blocks.push(subList);
-        }
-      } else if (tag === 'table') {
-        const thead = b.querySelector('thead');
-        let trs = Array.from(b.querySelectorAll('tbody tr'));
-        if (trs.length === 0) {
-          trs = Array.from(b.querySelectorAll('tr')).filter(tr => !tr.closest('thead'));
-        }
-        if (trs.length > 8) {
-          const chunkSize = 5;
-          for (let i = 0; i < trs.length; i += chunkSize) {
-            const subTable = document.createElement('table');
-            if (thead) subTable.appendChild(thead.cloneNode(true));
-            const subTbody = document.createElement('tbody');
-            trs.slice(i, i + chunkSize).forEach(tr => subTbody.appendChild(tr.cloneNode(true)));
-            subTable.appendChild(subTbody);
-            blocks.push(subTable);
-          }
-        } else {
-          blocks.push(b);
-        }
-      } else {
-        blocks.push(b);
-      }
-    });
-
-    // 依據欄數計算每行字數容量與單頁安全高度上限 (mm)
-    // A4 297mm - 邊距 8mm - 頁首 11mm = 278mm 可用高度
-    let charsPerLine = 24;
-    let lineHeightMm = 3.5;
-    let maxPageUnits = 790; // 3 欄標準：3 * 270mm = 810mm，設定 790mm 緊湊且滿版
-
-    if (cols === 4) {
-      charsPerLine = 18;
-      lineHeightMm = 3.2;
-      maxPageUnits = 1040; // 4 欄極限：4 * 270mm = 1080mm，設定 1040mm
-    } else if (cols === 2) {
-      charsPerLine = 36;
-      lineHeightMm = 3.8;
-      maxPageUnits = 530; // 2 欄舒適：2 * 270mm = 540mm，設定 530mm
+    const queue = Array.from(tempContainer.children);
+    if (queue.length === 0) {
+      const p = document.createElement('p');
+      p.textContent = tempContainer.textContent || '';
+      queue.push(p);
     }
 
-    // 精準視覺高度精算器 (剔除 KaTeX 標籤灌水，還原真實文字行數與公式實體尺寸)
-    const estimateNodeUnits = (block) => {
-      const tag = block.tagName ? block.tagName.toLowerCase() : 'p';
+    // 離屏量測沙盒 (保留真實 CSS 與字型幾何，但不可見、不影響版面)
+    const sandbox = document.createElement('div');
+    sandbox.setAttribute('aria-hidden', 'true');
+    sandbox.style.cssText = 'position:absolute; left:-10000px; top:0; visibility:hidden; pointer-events:none; z-index:-1;';
+    document.body.appendChild(sandbox);
 
-      let units = 5;
-      if (tag === 'h1') units = 8.0;
-      else if (tag === 'h2') units = 6.8;
-      else if (tag === 'h3') units = 5.8;
-      else if (tag === 'h4') units = 4.8;
-      else if (tag === 'hr') units = 2.5;
-      else if (tag === 'pre') {
-        const text = block.textContent || '';
-        const lineCount = (text.match(/\n/g) || []).length + 1;
-        units = Math.max(14, lineCount * 3.8 + 4);
-      } else if (tag === 'table') {
-        const rows = block.querySelectorAll ? block.querySelectorAll('tr').length : 1;
-        units = Math.max(12, rows * 4.6 + 3);
-      } else if (tag === 'ul' || tag === 'ol') {
-        const lis = block.querySelectorAll ? Array.from(block.querySelectorAll('li')) : [];
-        if (lis.length > 0) {
-          let listTotal = 1.2;
-          lis.forEach(li => {
-            // 分離 li 內的 KaTeX
-            const clone = li.cloneNode(true);
-            const kDisplays = clone.querySelectorAll ? clone.querySelectorAll('.katex-display') : [];
-            const kDisplaysCount = kDisplays.length;
-            const kAll = clone.querySelectorAll ? clone.querySelectorAll('.katex') : [];
-            const kInlineCount = Math.max(0, kAll.length - kDisplaysCount);
-            kAll.forEach(k => k.remove ? k.remove() : null);
-            const plain = (clone.textContent || '').replace(/\s+/g, ' ').trim();
-            const effLen = plain.length + (kInlineCount * 6);
-            const liLines = Math.max(1, Math.ceil(effLen / (charsPerLine - 1)));
-            listTotal += liLines * lineHeightMm + 0.8 + (kDisplaysCount * 10);
-          });
-          units = listTotal;
-        } else {
-          units = 8;
-        }
-      } else {
-        // 段落與公式
-        const clone = block.cloneNode(true);
-        const kDisplays = clone.querySelectorAll ? clone.querySelectorAll('.katex-display') : [];
-        const kDisplaysCount = kDisplays.length;
-        const kAll = clone.querySelectorAll ? clone.querySelectorAll('.katex') : [];
-        const kInlineCount = Math.max(0, kAll.length - kDisplaysCount);
-        kAll.forEach(k => k.remove ? k.remove() : null);
-        const plain = (clone.textContent || '').replace(/\s+/g, ' ').trim();
-        const effLen = plain.length + (kInlineCount * 6);
-        const estLines = Math.max(1, Math.ceil(effLen / charsPerLine));
-        units = estLines * lineHeightMm + 1.2 + (kDisplaysCount * 11);
-      }
+    const buildContentClass = (mode) => ['appendix-markdown-content', colClass, mode].filter(Boolean).join(' ');
 
-      block._estimatedUnits = units;
-      return units;
-    };
-
-    const pagesGroups = [];
-    let currentBlocks = [];
-    let currentUnits = 0;
-
-    blocks.forEach(block => {
-      const units = estimateNodeUnits(block);
-
-      // 若目前頁面加上此元素已超過單頁上限，且目前已有內容，則切至新的一頁
-      if (currentUnits + units > maxPageUnits && currentBlocks.length > 0) {
-        // 孤兒標題保護 (Orphan Heading Protection)
-        let carriedHeader = null;
-        if (currentBlocks.length > 1) {
-          const lastBlock = currentBlocks[currentBlocks.length - 1];
-          const lastTag = lastBlock.tagName ? lastBlock.tagName.toLowerCase() : '';
-          if (/^h[1-6]$/.test(lastTag)) {
-            carriedHeader = currentBlocks.pop();
-            currentUnits -= (carriedHeader._estimatedUnits || 6);
-          }
-        }
-
-        pagesGroups.push({ blocks: currentBlocks, units: currentUnits });
-
-        currentBlocks = carriedHeader ? [carriedHeader] : [];
-        currentUnits = carriedHeader ? (carriedHeader._estimatedUnits || 6) : 0;
-      }
-
-      currentBlocks.push(block);
-      currentUnits += units;
-    });
-
-    if (currentBlocks.length > 0) {
-      pagesGroups.push({ blocks: currentBlocks, units: currentUnits });
-    }
-
-    const totalPages = pagesGroups.length;
-    const resultWrappers = [];
-
-    pagesGroups.forEach((group, pIdx) => {
-      const isLastPage = pIdx === totalPages - 1;
+    // 建立一張與正式輸出相同結構的 A4 紙張
+    const createPageShell = () => {
       const sheet = document.createElement('div');
-      sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
-
-      const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
-      const colLabel = cols === 4 ? '4 欄極限微縮' : (cols === 2 ? '2 欄舒適排版' : '3 欄標準高密度');
+      sheet.className = 'a4-sheet print-page appendix-print-sheet appendix-notes-sheet portrait';
 
       const header = document.createElement('div');
       header.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm;">
-          <h2 style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 外部 AI 重點精華筆記${pageLabel}</h2>
-          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">Markdown & LaTeX ${colLabel}</span>
+          <h2 class="appendix-notes-title" style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 外部 AI 重點精華筆記</h2>
+          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">Markdown &amp; LaTeX ${colLabel}</span>
         </div>
       `;
       sheet.appendChild(header);
 
-      // 判斷是否需要末頁手寫備忘網格
-      const remainingUnits = maxPageUnits - group.units;
-      const shouldAddMemo = isLastPage && enableMemoGrid && (remainingUnits >= 120 || group.units < maxPageUnits * 0.82);
-
       const content = document.createElement('div');
-      let colClass = '';
-      if (cols === 4) colClass = 'cols-4';
-      else if (cols === 2) colClass = 'cols-2';
+      // 量測期間一律以「滿版」模式填充，與非末頁正式輸出一致
+      content.className = buildContentClass('full-page is-full-sheet');
 
-      // 若非最後一頁，強制套用 is-full-sheet 保證整頁高度由左至右填滿，杜絕底下空一大塊
-      const fullSheetClass = !isLastPage || (!shouldAddMemo && group.units >= maxPageUnits * 0.85) ? 'is-full-sheet' : '';
-      content.className = `appendix-markdown-content ${colClass} ${shouldAddMemo ? 'has-memo' : 'full-page'} ${fullSheetClass}`.trim();
-
-      group.blocks.forEach(b => {
-        content.appendChild(b.cloneNode(true));
-      });
+      // 流末端哨兵：零高度，永遠位於最後一個區塊之後
+      const sentinel = document.createElement('div');
+      sentinel.style.cssText = 'display:block; height:0; margin:0; padding:0; border:0;';
+      content.appendChild(sentinel);
 
       sheet.appendChild(content);
+      sandbox.appendChild(sheet);
+      return { sheet, header, content, sentinel, blocks: [] };
+    };
 
-      // 若符合條件，在最後一頁底部填補精美手寫備忘點陣區
-      if (shouldAddMemo) {
-        const memoBox = document.createElement('div');
-        memoBox.className = 'appendix-memo-box';
-        memoBox.innerHTML = `
-          <div class="appendix-memo-header">
-            <div class="appendix-memo-title">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-              </svg>
-              <span>考前手寫補充 / 專屬公式備忘區 (Exam Quick Notes & Scratch Pad)</span>
-            </div>
-            <span class="appendix-memo-hint">✎ 預留考場速記、突發重點與公式手寫區 (極限省紙不留白)</span>
-          </div>
-          <div class="appendix-memo-grid"></div>
-        `;
-        sheet.appendChild(memoBox);
+    // 溢出偵測：哨兵超出最後一欄右緣 (產生多餘欄) 或掉出內容區底部
+    const isOverflowing = (page) => {
+      const cRect = page.content.getBoundingClientRect();
+      const sRect = page.sentinel.getBoundingClientRect();
+      return sRect.left >= cRect.right - 1 || sRect.top > cRect.bottom + 1;
+    };
+
+    // 標題或「整段僅為粗體小標 / 以冒號結尾的短引言」視為標題類，不可孤立於頁尾
+    const isHeadingLike = (el) => {
+      if (!el || !el.tagName) return false;
+      const tag = el.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) return true;
+      if (tag === 'p') {
+        const text = (el.textContent || '').trim();
+        if (text.length === 0 || text.length > 40) return false;
+        if (/[:：]$/.test(text)) return true;
+        const strong = el.querySelector('strong, b');
+        if (el.children.length === 1 && strong && strong.textContent.trim() === text) return true;
       }
+      return false;
+    };
+
+    // 動態切分：將可容納的前段放入當頁，回傳 { head, tail }；無法切分時回傳 null (原區塊保持完整)
+    const trySplit = (page, block) => {
+      const tag = block.tagName ? block.tagName.toLowerCase() : '';
+
+      if (tag === 'ul' || tag === 'ol') {
+        const items = Array.from(block.children);
+        if (items.length < 2) return null;
+
+        const head = block.cloneNode(false);
+        page.content.insertBefore(head, page.sentinel);
+        let fit = 0;
+        for (const li of items) {
+          const clone = li.cloneNode(true);
+          head.appendChild(clone);
+          if (isOverflowing(page)) {
+            head.removeChild(clone);
+            break;
+          }
+          fit++;
+        }
+        if (fit === 0) {
+          page.content.removeChild(head);
+          return null;
+        }
+        if (fit === items.length) return { head, tail: null };
+
+        const tail = block.cloneNode(false);
+        if (tag === 'ol') {
+          const start = parseInt(block.getAttribute('start'), 10) || 1;
+          tail.setAttribute('start', String(start + fit));
+        }
+        items.slice(fit).forEach(li => tail.appendChild(li));
+        return { head, tail };
+      }
+
+      if (tag === 'table') {
+        const thead = block.querySelector('thead');
+        const rows = Array.from(block.querySelectorAll('tr')).filter(tr => !tr.closest('thead'));
+        if (rows.length < 2) return null;
+
+        // 每段表格皆重複表頭，跨頁閱讀不迷路
+        const makeShell = () => {
+          const t = block.cloneNode(false);
+          if (thead) t.appendChild(thead.cloneNode(true));
+          const tb = document.createElement('tbody');
+          t.appendChild(tb);
+          return { t, tb };
+        };
+
+        const { t: head, tb: headBody } = makeShell();
+        page.content.insertBefore(head, page.sentinel);
+        let fit = 0;
+        for (const tr of rows) {
+          const clone = tr.cloneNode(true);
+          headBody.appendChild(clone);
+          if (isOverflowing(page)) {
+            headBody.removeChild(clone);
+            break;
+          }
+          fit++;
+        }
+        if (fit === 0) {
+          page.content.removeChild(head);
+          return null;
+        }
+        if (fit === rows.length) return { head, tail: null };
+
+        const { t: tail, tb: tailBody } = makeShell();
+        rows.slice(fit).forEach(tr => tailBody.appendChild(tr));
+        return { head, tail };
+      }
+
+      return null;
+    };
+
+    const pages = [];
+    let page = createPageShell();
+
+    // 結束當頁：先執行孤兒標題保護，再開新頁
+    const finalizePage = () => {
+      while (page.blocks.length > 1 && isHeadingLike(page.blocks[page.blocks.length - 1])) {
+        const orphan = page.blocks.pop();
+        page.content.removeChild(orphan);
+        queue.unshift(orphan);
+      }
+      pages.push(page);
+      page = createPageShell();
+    };
+
+    let guard = 0;
+    while (queue.length > 0 && guard++ < 50000) {
+      const block = queue.shift();
+      page.content.insertBefore(block, page.sentinel);
+
+      if (!isOverflowing(page)) {
+        page.blocks.push(block);
+        continue;
+      }
+
+      // 溢出：先移除，再嘗試細粒度切分
+      page.content.removeChild(block);
+      const split = trySplit(page, block);
+      if (split) {
+        page.blocks.push(split.head);
+        if (split.tail) {
+          queue.unshift(split.tail);
+          finalizePage();
+        }
+        continue;
+      }
+
+      if (page.blocks.length === 0) {
+        // 單一不可切分區塊即超過整頁容量：強制放置，避免無限迴圈
+        page.content.insertBefore(block, page.sentinel);
+        page.blocks.push(block);
+        finalizePage();
+        continue;
+      }
+
+      queue.unshift(block);
+      finalizePage();
+    }
+
+    if (page.blocks.length > 0) {
+      pages.push(page);
+    } else if (page.sheet.parentNode) {
+      page.sheet.parentNode.removeChild(page.sheet);
+    }
+
+    const createMemoBox = () => {
+      const memoBox = document.createElement('div');
+      memoBox.className = 'appendix-memo-box';
+      memoBox.innerHTML = `
+        <div class="appendix-memo-header">
+          <div class="appendix-memo-title">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>考前手寫補充 / 專屬公式備忘區 (Exam Quick Notes &amp; Scratch Pad)</span>
+          </div>
+          <span class="appendix-memo-hint">✎ 預留考場速記、突發重點與公式手寫區 (極限省紙不留白)</span>
+        </div>
+        <div class="appendix-memo-grid"></div>
+      `;
+      return memoBox;
+    };
+
+    // 末頁模式實測決策：手寫備忘區 → 平衡欄 → 滿版 (保證不裁切)
+    const lastPage = pages[pages.length - 1];
+    if (lastPage) {
+      let settled = false;
+      if (enableMemoGrid) {
+        lastPage.content.className = buildContentClass('has-memo');
+        const memoBox = createMemoBox();
+        lastPage.sheet.appendChild(memoBox);
+        if (!isOverflowing(lastPage)) {
+          settled = true;
+        } else {
+          lastPage.sheet.removeChild(memoBox);
+        }
+      }
+      if (!settled) {
+        lastPage.content.className = buildContentClass('full-page');
+        if (isOverflowing(lastPage)) {
+          lastPage.content.className = buildContentClass('full-page is-full-sheet');
+        }
+      }
+    }
+
+    const totalPages = pages.length;
+    const resultWrappers = pages.map((pg, pIdx) => {
+      const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+      const titleEl = pg.header.querySelector('.appendix-notes-title');
+      if (titleEl) titleEl.textContent = `TE-NOTER 外部 AI 重點精華筆記${pageLabel}`;
+
+      // 移除量測用哨兵並自沙盒卸載
+      if (pg.sentinel.parentNode) pg.sentinel.parentNode.removeChild(pg.sentinel);
+      if (pg.sheet.parentNode) pg.sheet.parentNode.removeChild(pg.sheet);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'print-page-wrapper';
@@ -1316,10 +1366,11 @@ ${slidesContent}`;
       indicator.className = 'page-indicator-badge no-print';
       indicator.textContent = `A4 自訂筆記附錄${pageLabel}`;
       wrapper.appendChild(indicator);
-      wrapper.appendChild(sheet);
-
-      resultWrappers.push(wrapper);
+      wrapper.appendChild(pg.sheet);
+      return wrapper;
     });
+
+    if (sandbox.parentNode) sandbox.parentNode.removeChild(sandbox);
 
     return resultWrappers;
   }
