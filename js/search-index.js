@@ -465,7 +465,36 @@ ${slidesContent}`;
   }
 
   /**
-   * 產生大抄末頁實體列印專用「英文單字表附錄」A4 紙張節點 (支援多頁自動分頁)
+   * 建立單一單字項目 DOM 節點
+   */
+  createVocabItemElement(v) {
+    const item = document.createElement('div');
+    item.className = 'appendix-term-item';
+
+    // 智慧標註 [英] 與 [美] 標籤
+    let displayTerm = v.term || '';
+    displayTerm = displayTerm.replace(/\[(?:英|UK)\]/gi, '<span style="color:#d97706; font-size:6.2pt; font-weight:700; background:#fef3c7; padding:0 2px; border-radius:2px; margin:0 1px;">[英]</span>');
+    displayTerm = displayTerm.replace(/\[(?:美|US)\]/gi, '<span style="color:#2563eb; font-size:6.2pt; font-weight:700; background:#dbeafe; padding:0 2px; border-radius:2px; margin:0 1px;">[美]</span>');
+
+    let zhSpan = '';
+    if (v.zh) {
+      zhSpan = `<span style="color:#334155; font-size:6.8pt; margin-left:3px;">: ${v.zh}</span>`;
+    }
+
+    let pageBadge = '';
+    if (v.pages && v.pages.length > 0) {
+      pageBadge = `<span class="item-page-tag" style="color:#64748b; font-size:6pt; margin-left:auto;">P.${v.pages[0]}</span>`;
+    }
+
+    item.innerHTML = `
+      <span class="item-title-text"><strong style="font-size: 7.2pt; color:#0f172a;">${displayTerm}</strong>${zhSpan}</span>
+      ${pageBadge}
+    `;
+    return item;
+  }
+
+  /**
+   * 產生大抄末頁實體列印專用「英文單字表附錄」A4 紙張節點 (支援離屏沙盒實測動態分頁)
    */
   createVocabularyPrintSheets(vocabList, customPastedText = '') {
     // 若有自訂貼入的外部內容，優先擷取其中的單字部分，絕不混入考點
@@ -478,65 +507,123 @@ ${slidesContent}`;
     if (!activeList || activeList.length === 0) return [];
     // 確保單字 100% 依英文字母 A ~ Z (不分大小寫) 排序
     activeList = [...activeList].sort((a, b) => (a.term || '').localeCompare(b.term || '', 'en', { sensitivity: 'base', numeric: true }));
-    // 採用寬幅 3 欄式排版，每欄 35 筆，每頁 105 筆，欄寬達 62mm，長詞自然折行完整呈現不截斷
-    const itemsPerPage = 105;
-    const resultWrappers = [];
-    const totalPages = Math.ceil(activeList.length / itemsPerPage);
 
-    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
-      const pageVocabs = activeList.slice(pIdx * itemsPerPage, (pIdx + 1) * itemsPerPage);
-      const sheet = document.createElement('div');
-      sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
+    if (typeof document === 'undefined' || !document.body) return [];
 
-      const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
-      const header = document.createElement('div');
-      header.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm;">
-          <h2 style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 考場專有名詞與英文單字表附錄${pageLabel}</h2>
-          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">共收錄 ${activeList.length} 核心詞彙</span>
-        </div>
-      `;
-      sheet.appendChild(header);
+    // 離屏量測沙盒 (保留真實 CSS 與字型幾何，但不可見、不影響版面)
+    const sandbox = document.createElement('div');
+    sandbox.setAttribute('aria-hidden', 'true');
+    sandbox.style.cssText = 'position:absolute; left:-10000px; top:0; visibility:hidden; pointer-events:none; z-index:-1;';
+    document.body.appendChild(sandbox);
 
-      // 寬幅 3 欄式排版，文字呼吸感好，長詞中英文自然折行全部呈現
-      const cols = document.createElement('div');
-      cols.className = 'appendix-columns-3';
+    let resultWrappers = [];
 
-      pageVocabs.forEach(v => {
-        const item = document.createElement('div');
-        item.className = 'appendix-term-item';
+    try {
+      const createPageShell = () => {
+        const sheet = document.createElement('div');
+        sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
 
-        // 智慧標註 [英] 與 [美] 標籤
-        let displayTerm = v.term || '';
-        displayTerm = displayTerm.replace(/\[(?:英|UK)\]/gi, '<span style="color:#d97706; font-size:6.2pt; font-weight:700; background:#fef3c7; padding:0 2px; border-radius:2px; margin:0 1px;">[英]</span>');
-        displayTerm = displayTerm.replace(/\[(?:美|US)\]/gi, '<span style="color:#2563eb; font-size:6.2pt; font-weight:700; background:#dbeafe; padding:0 2px; border-radius:2px; margin:0 1px;">[美]</span>');
-
-        let zhSpan = '';
-        if (v.zh) {
-          zhSpan = `<span style="color:#334155; font-size:6.8pt; margin-left:3px;">: ${v.zh}</span>`;
-        }
-
-        let pageBadge = '';
-        if (v.pages && v.pages.length > 0) {
-          pageBadge = `<span class="item-page-tag" style="color:#64748b; font-size:6pt; margin-left:auto;">P.${v.pages[0]}</span>`;
-        }
-
-        item.innerHTML = `
-          <span class="item-title-text"><strong style="font-size: 7.2pt; color:#0f172a;">${displayTerm}</strong>${zhSpan}</span>
-          ${pageBadge}
+        const header = document.createElement('div');
+        header.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 3mm;">
+            <h2 class="appendix-vocab-title" style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 考場專有名詞與英文單字表附錄</h2>
+            <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">共收錄 ${activeList.length} 核心詞彙</span>
+          </div>
         `;
-        cols.appendChild(item);
-      });
-      sheet.appendChild(cols);
+        sheet.appendChild(header);
 
-      const wrapper = document.createElement('div');
-      wrapper.className = 'print-page-wrapper';
-      const indicator = document.createElement('div');
-      indicator.className = 'page-indicator-badge no-print';
-      indicator.textContent = `A4 單字表附錄${pageLabel}`;
-      wrapper.appendChild(indicator);
-      wrapper.appendChild(sheet);
-      resultWrappers.push(wrapper);
+        const cols = document.createElement('div');
+        // 量測期間一律以滿版模式 (column-fill: auto) 測量
+        cols.className = 'appendix-columns-3 is-full-sheet';
+
+        // 流末端哨兵：零高度，永遠位於最後一個項目之後
+        const sentinel = document.createElement('div');
+        sentinel.style.cssText = 'display:block; height:0; margin:0; padding:0; border:0;';
+        cols.appendChild(sentinel);
+
+        sheet.appendChild(cols);
+        sandbox.appendChild(sheet);
+        return { sheet, header, cols, sentinel, items: [] };
+      };
+
+      // 溢出偵測：哨兵超出最後一欄右緣 (產生第 4 欄) 或掉出內容區底部
+      const isOverflowing = (page) => {
+        const cRect = page.cols.getBoundingClientRect();
+        const sRect = page.sentinel.getBoundingClientRect();
+        if (cRect.width === 0 || cRect.height === 0) return false;
+        return sRect.left >= cRect.right - 1 || sRect.top > cRect.bottom + 1;
+      };
+
+      const pages = [];
+      let page = createPageShell();
+
+      const finalizePage = () => {
+        pages.push(page);
+        page = createPageShell();
+      };
+
+      const queue = activeList.map(v => this.createVocabItemElement(v));
+
+      let guard = 0;
+      while (queue.length > 0 && guard++ < 50000) {
+        const item = queue.shift();
+        page.cols.insertBefore(item, page.sentinel);
+
+        if (!isOverflowing(page)) {
+          page.items.push(item);
+          continue;
+        }
+
+        // 溢出：將該項目抽回
+        page.cols.removeChild(item);
+
+        if (page.items.length === 0) {
+          // 單一項目超過整頁容量 (極端異常保護)：強制放入避免死循環
+          page.cols.insertBefore(item, page.sentinel);
+          page.items.push(item);
+          finalizePage();
+          continue;
+        }
+
+        queue.unshift(item);
+        finalizePage();
+      }
+
+      if (page.items.length > 0) {
+        pages.push(page);
+      } else if (page.sheet.parentNode) {
+        page.sheet.parentNode.removeChild(page.sheet);
+      }
+
+      // 末頁平衡欄位排版
+      const lastPage = pages[pages.length - 1];
+      if (lastPage) {
+        lastPage.cols.className = 'appendix-columns-3 is-last-sheet';
+      }
+
+      const totalPages = pages.length;
+      resultWrappers = pages.map((pg, pIdx) => {
+        const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+        const titleEl = pg.header.querySelector('.appendix-vocab-title');
+        if (titleEl) {
+          titleEl.textContent = `TE-NOTER 考場專有名詞與英文單字表附錄${pageLabel}`;
+        }
+
+        // 移除量測用哨兵並自沙盒卸載
+        if (pg.sentinel.parentNode) pg.sentinel.parentNode.removeChild(pg.sentinel);
+        if (pg.sheet.parentNode) pg.sheet.parentNode.removeChild(pg.sheet);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'print-page-wrapper';
+        const indicator = document.createElement('div');
+        indicator.className = 'page-indicator-badge no-print';
+        indicator.textContent = `A4 單字表附錄${pageLabel}`;
+        wrapper.appendChild(indicator);
+        wrapper.appendChild(pg.sheet);
+        return wrapper;
+      });
+    } finally {
+      if (sandbox.parentNode) sandbox.parentNode.removeChild(sandbox);
     }
 
     return resultWrappers;
@@ -548,7 +635,38 @@ ${slidesContent}`;
   }
 
   /**
-   * 產生大抄末頁實體列印專用「章節速查與關鍵考點目錄」A4 紙張節點 (支援跨度區間、關鍵標籤與寬幅3欄式排版)
+   * 建立單一考點目錄項目 DOM 節點
+   */
+  createQuickRefItemElement(kp) {
+    const item = document.createElement('div');
+    const isSpan = kp.isSpan || (kp.pageStr && kp.pageStr.includes('-'));
+    item.className = `appendix-quickref-item ${isSpan ? 'quickref-span-item' : ''}`;
+
+    const pageDisplay = kp.pageStr || (kp.slideNum ? `#${kp.slideNum}` : '');
+
+    // 標籤樣式對應
+    let tagHtml = '';
+    if (kp.tag) {
+      const t = kp.tag.trim();
+      let tagClass = 'tag-default';
+      if (t.includes('公式') || t.includes('計算')) tagClass = 'tag-formula';
+      else if (t.includes('比較') || t.includes('對照')) tagClass = 'tag-compare';
+      else if (t.includes('圖解') || t.includes('架構') || t.includes('流程')) tagClass = 'tag-diagram';
+      else if (t.includes('必考') || t.includes('重點')) tagClass = 'tag-formula';
+      tagHtml = `<span class="quickref-tag ${tagClass}">[${t}]</span>`;
+    }
+
+    const titleText = kp.title || kp.fullTitle || '';
+
+    item.innerHTML = `
+      <span class="quickref-num ${isSpan ? 'num-span' : ''}">${pageDisplay}</span>
+      <span class="quickref-title" title="${titleText}">${tagHtml}${titleText}</span>
+    `;
+    return item;
+  }
+
+  /**
+   * 產生大抄末頁實體列印專用「章節速查與關鍵考點目錄」A4 紙張節點 (支援離屏沙盒實測動態分頁)
    */
   createQuickRefPrintSheets(keypointsList) {
     const activePoints = keypointsList.filter(p => !p.isExcluded);
@@ -562,69 +680,116 @@ ${slidesContent}`;
       return a.isSpan ? -1 : 1;
     });
 
-    // 高飽滿度 3 欄排版：每欄 38 筆，每頁 114 筆，縱向高度充分利用達 90%
-    const itemsPerPage = 114;
-    const totalPages = Math.ceil(activePoints.length / itemsPerPage);
-    const resultWrappers = [];
+    if (typeof document === 'undefined' || !document.body) return [];
 
-    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
-      const pagePoints = activePoints.slice(pIdx * itemsPerPage, (pIdx + 1) * itemsPerPage);
-      const sheet = document.createElement('div');
-      sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
+    // 離屏量測沙盒
+    const sandbox = document.createElement('div');
+    sandbox.setAttribute('aria-hidden', 'true');
+    sandbox.style.cssText = 'position:absolute; left:-10000px; top:0; visibility:hidden; pointer-events:none; z-index:-1;';
+    document.body.appendChild(sandbox);
 
-      const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+    let resultWrappers = [];
 
-      const header = document.createElement('div');
-      header.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 2.5mm;">
-          <h2 style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 章節速查與關鍵考點目錄${pageLabel}</h2>
-          <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">共收錄 ${activePoints.length} 個章節主題與核心考點 (3 欄速查排版)</span>
-        </div>
-      `;
-      sheet.appendChild(header);
+    try {
+      const createPageShell = () => {
+        const sheet = document.createElement('div');
+        sheet.className = 'a4-sheet print-page appendix-print-sheet portrait';
 
-      const cols = document.createElement('div');
-      cols.className = 'appendix-columns-3';
+        const header = document.createElement('div');
+        header.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 2.5mm;">
+            <h2 class="appendix-quickref-title" style="font-size: 11pt; margin: 0; font-weight: bold;">TE-NOTER 章節速查與關鍵考點目錄</h2>
+            <span style="font-family: monospace; font-size: 7.5pt; color: #334155;">共收錄 ${activePoints.length} 個章節主題與核心考點 (3 欄速查排版)</span>
+          </div>
+        `;
+        sheet.appendChild(header);
 
-      pagePoints.forEach(kp => {
-        const item = document.createElement('div');
-        const isSpan = kp.isSpan || (kp.pageStr && kp.pageStr.includes('-'));
-        item.className = `appendix-quickref-item ${isSpan ? 'quickref-span-item' : ''}`;
+        const cols = document.createElement('div');
+        cols.className = 'appendix-columns-3 is-full-sheet';
 
-        const pageDisplay = kp.pageStr || (kp.slideNum ? `#${kp.slideNum}` : '');
+        const sentinel = document.createElement('div');
+        sentinel.style.cssText = 'display:block; height:0; margin:0; padding:0; border:0;';
+        cols.appendChild(sentinel);
 
-        // 標籤樣式對應
-        let tagHtml = '';
-        if (kp.tag) {
-          const t = kp.tag.trim();
-          let tagClass = 'tag-default';
-          if (t.includes('公式') || t.includes('計算')) tagClass = 'tag-formula';
-          else if (t.includes('比較') || t.includes('對照')) tagClass = 'tag-compare';
-          else if (t.includes('圖解') || t.includes('架構') || t.includes('流程')) tagClass = 'tag-diagram';
-          else if (t.includes('必考') || t.includes('重點')) tagClass = 'tag-formula';
-          tagHtml = `<span class="quickref-tag ${tagClass}">[${t}]</span>`;
+        sheet.appendChild(cols);
+        sandbox.appendChild(sheet);
+        return { sheet, header, cols, sentinel, items: [] };
+      };
+
+      const isOverflowing = (page) => {
+        const cRect = page.cols.getBoundingClientRect();
+        const sRect = page.sentinel.getBoundingClientRect();
+        if (cRect.width === 0 || cRect.height === 0) return false;
+        return sRect.left >= cRect.right - 1 || sRect.top > cRect.bottom + 1;
+      };
+
+      const pages = [];
+      let page = createPageShell();
+
+      const finalizePage = () => {
+        pages.push(page);
+        page = createPageShell();
+      };
+
+      const queue = activePoints.map(kp => this.createQuickRefItemElement(kp));
+
+      let guard = 0;
+      while (queue.length > 0 && guard++ < 50000) {
+        const item = queue.shift();
+        page.cols.insertBefore(item, page.sentinel);
+
+        if (!isOverflowing(page)) {
+          page.items.push(item);
+          continue;
         }
 
-        const titleText = kp.title || kp.fullTitle || '';
+        page.cols.removeChild(item);
 
-        item.innerHTML = `
-          <span class="quickref-num ${isSpan ? 'num-span' : ''}">${pageDisplay}</span>
-          <span class="quickref-title" title="${titleText}">${tagHtml}${titleText}</span>
-        `;
-        cols.appendChild(item);
+        if (page.items.length === 0) {
+          page.cols.insertBefore(item, page.sentinel);
+          page.items.push(item);
+          finalizePage();
+          continue;
+        }
+
+        queue.unshift(item);
+        finalizePage();
+      }
+
+      if (page.items.length > 0) {
+        pages.push(page);
+      } else if (page.sheet.parentNode) {
+        page.sheet.parentNode.removeChild(page.sheet);
+      }
+
+      // 末頁平衡欄位排版
+      const lastPage = pages[pages.length - 1];
+      if (lastPage) {
+        lastPage.cols.className = 'appendix-columns-3 is-last-sheet';
+      }
+
+      const totalPages = pages.length;
+      resultWrappers = pages.map((pg, pIdx) => {
+        const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+        const titleEl = pg.header.querySelector('.appendix-quickref-title');
+        if (titleEl) {
+          titleEl.textContent = `TE-NOTER 章節速查與關鍵考點目錄${pageLabel}`;
+        }
+
+        if (pg.sentinel.parentNode) pg.sentinel.parentNode.removeChild(pg.sentinel);
+        if (pg.sheet.parentNode) pg.sheet.parentNode.removeChild(pg.sheet);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'print-page-wrapper';
+        const indicator = document.createElement('div');
+        indicator.className = 'page-indicator-badge no-print';
+        indicator.textContent = `A4 考點速查目錄附錄${pageLabel}`;
+        wrapper.appendChild(indicator);
+        wrapper.appendChild(pg.sheet);
+        return wrapper;
       });
-
-      sheet.appendChild(cols);
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'print-page-wrapper';
-      const indicator = document.createElement('div');
-      indicator.className = 'page-indicator-badge no-print';
-      indicator.textContent = `A4 考點速查目錄附錄${pageLabel}`;
-      wrapper.appendChild(indicator);
-      wrapper.appendChild(sheet);
-
-      resultWrappers.push(wrapper);
+    } finally {
+      if (sandbox.parentNode) sandbox.parentNode.removeChild(sandbox);
     }
 
     return resultWrappers;

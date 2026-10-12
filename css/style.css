@@ -1730,39 +1730,51 @@ body {
 }
 
 .appendix-columns-4 {
-  flex: 1;
+  flex: 1 1 0;
   column-count: 4;
   column-gap: 5mm;
   column-rule: 0.5pt solid #cbd5e1;
   font-size: 6.8pt;
   line-height: 1.35;
-  height: calc(297mm - 32mm);
-  max-height: calc(297mm - 32mm);
+  height: auto;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
+  column-fill: auto;
 }
 
 .appendix-columns-2 {
-  flex: 1;
+  flex: 1 1 0;
   column-count: 2;
   column-gap: 8mm;
   column-rule: 0.5pt solid #cbd5e1;
   font-size: 7.5pt;
   line-height: 1.4;
-  height: calc(297mm - 32mm);
-  max-height: calc(297mm - 32mm);
+  height: auto;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
+  column-fill: auto;
 }
 
 .appendix-columns-3 {
-  flex: 1;
+  flex: 1 1 0;
   column-count: 3;
   column-gap: 6mm;
   column-rule: 0.5pt solid #cbd5e1;
   font-size: 7.5pt;
   line-height: 1.45;
-  height: calc(297mm - 32mm);
-  max-height: calc(297mm - 32mm);
+  height: auto;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
+  column-fill: auto;
+}
+
+.appendix-columns-3.is-last-sheet,
+.appendix-columns-2.is-last-sheet,
+.appendix-columns-4.is-last-sheet {
+  column-fill: balance;
 }
 
 .appendix-quickref-item {

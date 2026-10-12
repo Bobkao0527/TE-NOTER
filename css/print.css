@@ -135,7 +135,8 @@
     filter: grayscale(100%) contrast(160%) brightness(105%) !important;
   }
 
-  /* 大抄末頁索引附錄頁列印專屬排版 */
+  /* 大抄末頁索引附錄頁列印專屬排版：邊距須與螢幕預覽一致 (覆蓋 .a4-sheet.print-page 的 4mm)，確保實測分頁結果 1:1 輸出 */
+  .a4-sheet.print-page.appendix-print-sheet,
   .appendix-print-sheet {
     box-sizing: border-box !important;
     font-size: 8pt !important;
@@ -145,6 +146,8 @@
     height: 297mm !important;
     max-height: 297mm !important;
     padding: 8mm 10mm !important;
+    display: flex !important;
+    flex-direction: column !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -163,11 +166,14 @@
     column-gap: 5mm !important;
     column-rule: 0.5pt solid #ccc !important;
     padding: 0 !important;
-    height: 255mm !important;
-    max-height: 255mm !important;
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: hidden !important;
     font-size: 6.8pt !important;
     line-height: 1.35 !important;
+    column-fill: auto !important;
   }
 
   .appendix-print-sheet .appendix-columns-2 {
@@ -177,11 +183,14 @@
     column-gap: 8mm !important;
     column-rule: 0.5pt solid #ccc !important;
     padding: 0 !important;
-    height: 255mm !important;
-    max-height: 255mm !important;
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: hidden !important;
     font-size: 7.5pt !important;
     line-height: 1.4 !important;
+    column-fill: auto !important;
   }
 
   .appendix-print-sheet .appendix-columns-3 {
@@ -191,11 +200,20 @@
     column-gap: 6mm !important;
     column-rule: 0.5pt solid #ccc !important;
     padding: 0 !important;
-    height: 255mm !important;
-    max-height: 255mm !important;
+    flex: 1 1 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: hidden !important;
     font-size: 7.5pt !important;
     line-height: 1.45 !important;
+    column-fill: auto !important;
+  }
+
+  .appendix-print-sheet .appendix-columns-3.is-last-sheet,
+  .appendix-print-sheet .appendix-columns-2.is-last-sheet,
+  .appendix-print-sheet .appendix-columns-4.is-last-sheet {
+    column-fill: balance !important;
   }
 
   .appendix-print-sheet .appendix-quickref-item {
