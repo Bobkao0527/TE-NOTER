@@ -1902,19 +1902,32 @@ body {
 }
 
 /* ========================================================
-   自訂筆記 Markdown & KaTeX 數學公式微縮印刷排版
+   自訂筆記 Markdown & KaTeX 數學公式微縮印刷排版 (獨立 Flex 欄容器)
    ======================================================== */
 .appendix-markdown-content {
   width: 100%;
-  column-count: 3;
-  column-gap: 5.5mm;
-  column-rule: 0.5pt solid #cbd5e1;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 2.75mm; /* 搭配中間 0.5pt divider 等於 5.5mm 欄距 */
   font-size: 7.2pt;
   line-height: 1.38;
   max-height: calc(297mm - 32mm);
   overflow: hidden;
   color: #0f172a;
-  column-fill: auto;
+}
+
+.appendix-markdown-content .notes-col {
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.appendix-markdown-content .notes-col-divider {
+  width: 0;
+  border-left: 0.5pt solid #cbd5e1;
+  flex-shrink: 0;
+  align-self: stretch;
 }
 
 /* 滿頁模式：高度依實際內容決定，若為整頁滿版則強制撐滿消除底部空白 */
@@ -1924,7 +1937,7 @@ body {
   min-height: 0;
 }
 
-/* 強制滿版模式 (非末頁或滿載頁面)：填滿整頁高度，確保 column-fill: auto 從左至右填滿至底，徹底消除底下大空白 */
+/* 強制滿版模式 (非末頁或滿載頁面)：填滿整頁高度，讓欄分隔線延伸至底 */
 /* 以 flex 精準撐滿「紙張高度 - 邊距 - 頁首」的剩餘空間，避免固定高度超出紙張被裁切 */
 .appendix-markdown-content.is-full-sheet {
   flex: 1 1 0;
@@ -1941,16 +1954,14 @@ body {
 
 /* 4 欄極限微縮 */
 .appendix-markdown-content.cols-4 {
-  column-count: 4;
-  column-gap: 4.5mm;
+  gap: 2.25mm;
   font-size: 6.6pt;
   line-height: 1.32;
 }
 
 /* 2 欄舒適易讀 */
 .appendix-markdown-content.cols-2 {
-  column-count: 2;
-  column-gap: 7mm;
+  gap: 3.5mm;
   font-size: 8.0pt;
   line-height: 1.42;
 }
@@ -2097,7 +2108,8 @@ body {
 
 .appendix-markdown-content p {
   margin: 0 0 1.2mm 0;
-  word-break: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .appendix-markdown-content ul,
@@ -2108,7 +2120,8 @@ body {
 
 .appendix-markdown-content li {
   margin-bottom: 0.6mm;
-  word-break: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .appendix-markdown-content strong {
@@ -2157,6 +2170,8 @@ body {
   border: 0.5pt solid #94a3b8;
   padding: 1.2px 2px;
   text-align: left;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .appendix-markdown-content th {

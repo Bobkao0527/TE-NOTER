@@ -290,15 +290,28 @@
   .appendix-print-sheet .appendix-markdown-content {
     background: transparent !important;
     color: #000000 !important;
-    column-count: 3;
-    column-gap: 5.5mm !important;
-    column-rule: 0.5pt solid #cbd5e1 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    gap: 2.75mm !important;
     padding: 0 !important;
     max-height: 272mm !important;
     overflow: hidden !important;
     font-size: 7.2pt !important;
     line-height: 1.38 !important;
-    column-fill: auto !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content .notes-col {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .appendix-print-sheet .appendix-markdown-content .notes-col-divider {
+    width: 0 !important;
+    border-left: 0.5pt solid #cbd5e1 !important;
+    flex-shrink: 0 !important;
+    align-self: stretch !important;
   }
 
   /* 外部 AI 筆記頁：邊距須與螢幕預覽一致 (覆蓋 .a4-sheet.print-page 的 4mm)，確保實測分頁結果 1:1 輸出 */
@@ -325,15 +338,13 @@
   }
 
   .appendix-print-sheet .appendix-markdown-content.cols-4 {
-    column-count: 4 !important;
-    column-gap: 4.5mm !important;
+    gap: 2.25mm !important;
     font-size: 6.6pt !important;
     line-height: 1.32 !important;
   }
 
   .appendix-print-sheet .appendix-markdown-content.cols-2 {
-    column-count: 2 !important;
-    column-gap: 7mm !important;
+    gap: 3.5mm !important;
     font-size: 8.0pt !important;
     line-height: 1.42 !important;
   }

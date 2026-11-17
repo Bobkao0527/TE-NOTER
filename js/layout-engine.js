@@ -628,18 +628,53 @@ export class LayoutEngine {
         });
 
       } else {
-        // === 外部自訂筆記 (支援 Markdown & KaTeX 公式 3 欄排版) ===
+        // === 外部自訂筆記 (支援 Markdown & KaTeX 公式多欄排版) ===
         let renderedSuccessfully = false;
 
         // 優先使用 html2canvas 進行 100% 原始 DOM 精確截圖 (避開 SVG 沙盒 Tainted Canvas 限制)
         if (typeof window !== 'undefined' && window.html2canvas) {
+          const sandbox = document.createElement('div');
+          sandbox.style.cssText = 'position:fixed; left:-10000px; top:0; width:210mm; height:297mm; z-index:-9999; background:#ffffff; pointer-events:none;';
           try {
-            // 暫時將 sheet 掛載至 document.body (不可見區域) 以保證取得真實 CSS 樣式與 KaTeX 公式幾何
-            const sandbox = document.createElement('div');
-            sandbox.style.cssText = 'position:fixed; left:-9999px; top:-9999px; width:210mm; min-height:297mm; z-index:-9999; background:#ffffff; opacity:0; pointer-events:none;';
+            // 暫時將 sheet 掛載至獨立離屏區域以保證取得真實 CSS 樣式與 KaTeX 公式幾何
             const cloneSheet = sheet.cloneNode(true);
             sandbox.appendChild(cloneSheet);
             document.body.appendChild(sandbox);
+
+            // 避開 html2canvas 對跨行 inline <code> 繪製整行聯集底色框，以及 CJK 跨行詞彙被 getBoundingClientRect 拉回前一行行首的已知缺陷
+            cloneSheet.querySelectorAll('.appendix-markdown-content code').forEach(codeEl => {
+              if (codeEl.getClientRects().length > 1) {
+                codeEl.style.background = 'transparent';
+                codeEl.style.border = 'none';
+                codeEl.style.padding = '0';
+              }
+            });
+
+            const contentRoot = cloneSheet.querySelector('.appendix-markdown-content');
+            if (contentRoot && document.createTreeWalker) {
+              const walker = document.createTreeWalker(contentRoot, NodeFilter.SHOW_TEXT);
+              const textNodes = [];
+              let tn;
+              while ((tn = walker.nextNode())) {
+                if (tn.data && tn.data.length > 1 && !tn.parentElement?.closest('.katex-mathml')) {
+                  textNodes.push(tn);
+                }
+              }
+              const measureRange = document.createRange();
+              for (const node of textNodes) {
+                measureRange.selectNodeContents(node);
+                if (measureRange.getClientRects().length <= 1) continue;
+                // 將跨行文字節點依 CJK 字元與連續非 CJK 片段切分為獨立 TextNode，避免 html2canvas 跨行合併計算座標
+                const tokens = node.data.match(/[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]|[^\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]+/g);
+                if (tokens && tokens.length > 1 && node.parentNode) {
+                  const frag = document.createDocumentFragment();
+                  for (const tok of tokens) {
+                    frag.appendChild(document.createTextNode(tok));
+                  }
+                  node.parentNode.replaceChild(frag, node);
+                }
+              }
+            }
 
             // 使用 html2canvas 渲染高解析度 (scale: 3 約 300DPI 印刷畫質)
             const renderedCanvas = await window.html2canvas(cloneSheet, {
@@ -647,11 +682,9 @@ export class LayoutEngine {
               useCORS: true,
               logging: false,
               backgroundColor: '#ffffff',
+              scrollX: 0,
+              scrollY: 0,
             });
-
-            if (sandbox.parentNode) {
-              sandbox.parentNode.removeChild(sandbox);
-            }
 
             if (renderedCanvas) {
               ctx.drawImage(renderedCanvas, 0, 0, width, height);
@@ -660,19 +693,24 @@ export class LayoutEngine {
           } catch (h2cErr) {
             console.warn('html2canvas 渲染提示，改用 Native Canvas Fallback:', h2cErr);
             renderedSuccessfully = false;
+          } finally {
+            if (sandbox.parentNode) {
+              sandbox.parentNode.removeChild(sandbox);
+            }
           }
         }
 
         // 若 html2canvas 未成功，使用純原生 Canvas 2D 逐區塊無失真排版
         if (!renderedSuccessfully) {
-          const blocks = sheet.querySelectorAll('.appendix-markdown-content > *');
-          const colWidth = 720;
-          const colStartX = [110, 875, 1640];
+          const colEls = Array.from(sheet.querySelectorAll('.appendix-markdown-content .notes-col'));
+          const colCount = colEls.length > 0 ? colEls.length : 3;
+          const colGapPx = 60;
+          const marginX = 110;
+          const colWidth = Math.floor((width - marginX * 2 - colGapPx * (colCount - 1)) / colCount);
+          const colStartX = Array.from({ length: colCount }, (_, i) => marginX + i * (colWidth + colGapPx));
           const startY = 240;
-          let curCol = 0;
-          let curY = startY;
 
-          blocks.forEach(p => {
+          const drawBlock = (p, colIdx, curY) => {
             const tag = p.tagName ? p.tagName.toLowerCase() : '';
             const isH1 = tag === 'h1' || p.querySelector('strong[style*="font-size:10pt"]');
             const isH2 = tag === 'h2' || p.querySelector('strong[style*="font-size:9pt"]');
@@ -686,7 +724,7 @@ export class LayoutEngine {
             const words = text.split('');
             let line = '';
             const pLines = [];
-            for (let char of words) {
+            for (const char of words) {
               if (ctx.measureText(line + char).width < colWidth) {
                 line += char;
               } else {
@@ -697,21 +735,35 @@ export class LayoutEngine {
             if (line) pLines.push(line);
 
             const lineHeight = isPre ? 30 : 34;
-            const blockHeight = pLines.length * lineHeight + (isH1 || isH2 ? 22 : 12);
-            if (curY + blockHeight > height - 140) {
-              curCol++;
-              curY = startY;
-            }
-
-            if (curCol < 3) {
-              const x = colStartX[curCol];
-              pLines.forEach(l => {
+            const x = colStartX[colIdx];
+            pLines.forEach(l => {
+              if (curY + lineHeight <= height - 120) {
                 ctx.fillText(l, x, curY + 24);
-                curY += lineHeight;
+              }
+              curY += lineHeight;
+            });
+            return curY + (isH1 || isH2 ? 16 : 8);
+          };
+
+          if (colEls.length > 0) {
+            colEls.forEach((colEl, colIdx) => {
+              let curY = startY;
+              Array.from(colEl.children).forEach(p => {
+                curY = drawBlock(p, colIdx, curY);
               });
-              curY += (isH1 || isH2 ? 16 : 8);
-            }
-          });
+            });
+          } else {
+            const blocks = sheet.querySelectorAll('.appendix-markdown-content > *');
+            let curCol = 0;
+            let curY = startY;
+            blocks.forEach(p => {
+              if (curY > height - 200 && curCol + 1 < colCount) {
+                curCol++;
+                curY = startY;
+              }
+              curY = drawBlock(p, curCol, curY);
+            });
+          }
         }
       }
 

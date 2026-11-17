@@ -846,7 +846,32 @@ ${slidesContent}`;
 
       if (inTableSection) {
         if (trimmed === '') {
-          tableBuffer.push(line);
+          // 向前查看連續空行後的第一個非空行，區分「碎片化表格內的空行」與「表格結束後的間隔空行」
+          let nextIdx = i + 1;
+          while (nextIdx < lines.length && lines[nextIdx].trim() === '') {
+            nextIdx++;
+          }
+          const nextNonBlank = nextIdx < lines.length ? lines[nextIdx] : null;
+          const nextIsTable = nextNonBlank !== null && isTableLine(nextNonBlank);
+          const bufferHasSeparator = tableBuffer.some(l => /^\|?\s*:?-+[-:\s|]+$/.test(l.trim()));
+          const nextAfterNext = (nextIdx + 1 < lines.length) ? lines[nextIdx + 1] : null;
+          const nextStartsNewTable = nextIsTable
+            && bufferHasSeparator
+            && !isSeparatorLine(nextNonBlank)
+            && nextAfterNext !== null
+            && isSeparatorLine(nextAfterNext);
+
+          if (!nextIsTable || nextStartsNewTable) {
+            result.push(...this.flushBrokenTableBuffer(tableBuffer));
+            tableBuffer = [];
+            inTableSection = false;
+            for (let k = i; k < nextIdx; k++) {
+              result.push(lines[k]);
+            }
+            i = nextIdx - 1;
+          } else {
+            tableBuffer.push(line);
+          }
         } else if (isTableLine(line)) {
           tableBuffer.push(line);
         } else {
@@ -1295,7 +1320,7 @@ ${slidesContent}`;
 
     const buildContentClass = (mode) => ['appendix-markdown-content', colClass, mode].filter(Boolean).join(' ');
 
-    // 建立一張與正式輸出相同結構的 A4 紙張
+    // 建立一張與正式輸出相同結構的 A4 紙張（採用獨立 Flex 欄容器，徹底避開 CSS column-count 在 html2canvas 導出時的跨欄碎裂）
     const createPageShell = () => {
       const sheet = document.createElement('div');
       sheet.className = 'a4-sheet print-page appendix-print-sheet appendix-notes-sheet portrait';
@@ -1313,24 +1338,40 @@ ${slidesContent}`;
       // 量測期間一律以「滿版」模式填充，與非末頁正式輸出一致
       content.className = buildContentClass('full-page is-full-sheet');
 
-      // 流末端哨兵：零高度，永遠位於最後一個區塊之後
-      const sentinel = document.createElement('div');
-      sentinel.style.cssText = 'display:block; height:0; margin:0; padding:0; border:0;';
-      content.appendChild(sentinel);
+      const columns = [];
+      for (let c = 0; c < cols; c++) {
+        if (c > 0) {
+          const divider = document.createElement('div');
+          divider.className = 'notes-col-divider';
+          content.appendChild(divider);
+        }
+        const colEl = document.createElement('div');
+        colEl.className = 'notes-col';
+
+        // 欄末端哨兵：零高度，永遠位於該欄最後一個區塊之後
+        const sentinel = document.createElement('div');
+        sentinel.style.cssText = 'display:block; height:0; margin:0; padding:0; border:0;';
+        colEl.appendChild(sentinel);
+
+        content.appendChild(colEl);
+        columns.push({ el: colEl, sentinel, blocks: [] });
+      }
 
       sheet.appendChild(content);
       sandbox.appendChild(sheet);
-      return { sheet, header, content, sentinel, blocks: [] };
+      return { sheet, header, content, columns };
     };
 
-    // 溢出偵測：哨兵超出最後一欄右緣 (產生多餘欄) 或掉出內容區底部
-    const isOverflowing = (page) => {
-      const cRect = page.content.getBoundingClientRect();
-      const sRect = page.sentinel.getBoundingClientRect();
-      return sRect.left >= cRect.right - 1 || sRect.top > cRect.bottom + 1;
+    // 單欄溢出偵測：哨兵掉出內容區底部即代表該欄已滿
+    const isColOverflowing = (pg, col) => {
+      const cRect = pg.content.getBoundingClientRect();
+      const sRect = col.sentinel.getBoundingClientRect();
+      return sRect.top > cRect.bottom + 1;
     };
 
-    // 標題或「整段僅為粗體小標 / 以冒號結尾的短引言」視為標題類，不可孤立於頁尾
+    const isPageOverflowing = (pg) => pg.columns.some(col => isColOverflowing(pg, col));
+
+    // 標題或「整段僅為粗體小標 / 以冒號結尾的短引言」視為標題類，不可孤立於欄尾/頁尾
     const isHeadingLike = (el) => {
       if (!el || !el.tagName) return false;
       const tag = el.tagName.toLowerCase();
@@ -1345,8 +1386,8 @@ ${slidesContent}`;
       return false;
     };
 
-    // 動態切分：將可容納的前段放入當頁，回傳 { head, tail }；無法切分時回傳 null (原區塊保持完整)
-    const trySplit = (page, block) => {
+    // 動態切分：將可容納的前段放入指定欄位，回傳 { head, tail }；無法切分時回傳 null (原區塊保持完整)
+    const trySplit = (pg, col, block) => {
       const tag = block.tagName ? block.tagName.toLowerCase() : '';
 
       if (tag === 'ul' || tag === 'ol') {
@@ -1354,19 +1395,19 @@ ${slidesContent}`;
         if (items.length < 2) return null;
 
         const head = block.cloneNode(false);
-        page.content.insertBefore(head, page.sentinel);
+        col.el.insertBefore(head, col.sentinel);
         let fit = 0;
         for (const li of items) {
           const clone = li.cloneNode(true);
           head.appendChild(clone);
-          if (isOverflowing(page)) {
+          if (isColOverflowing(pg, col)) {
             head.removeChild(clone);
             break;
           }
           fit++;
         }
         if (fit === 0) {
-          page.content.removeChild(head);
+          col.el.removeChild(head);
           return null;
         }
         if (fit === items.length) return { head, tail: null };
@@ -1385,7 +1426,7 @@ ${slidesContent}`;
         const rows = Array.from(block.querySelectorAll('tr')).filter(tr => !tr.closest('thead'));
         if (rows.length < 2) return null;
 
-        // 每段表格皆重複表頭，跨頁閱讀不迷路
+        // 每段表格皆重複表頭，跨欄/跨頁閱讀不迷路
         const makeShell = () => {
           const t = block.cloneNode(false);
           if (thead) t.appendChild(thead.cloneNode(true));
@@ -1395,19 +1436,19 @@ ${slidesContent}`;
         };
 
         const { t: head, tb: headBody } = makeShell();
-        page.content.insertBefore(head, page.sentinel);
+        col.el.insertBefore(head, col.sentinel);
         let fit = 0;
         for (const tr of rows) {
           const clone = tr.cloneNode(true);
           headBody.appendChild(clone);
-          if (isOverflowing(page)) {
+          if (isColOverflowing(pg, col)) {
             headBody.removeChild(clone);
             break;
           }
           fit++;
         }
         if (fit === 0) {
-          page.content.removeChild(head);
+          col.el.removeChild(head);
           return null;
         }
         if (fit === rows.length) return { head, tail: null };
@@ -1420,59 +1461,60 @@ ${slidesContent}`;
       return null;
     };
 
-    const pages = [];
-    let page = createPageShell();
+    // 將佇列區塊依序填入單一頁面之各欄，回傳是否全部容納完畢
+    const fillSinglePage = (targetPage, targetQueue, allowForceInEmptyCol = true) => {
+      let colIdx = 0;
+      let localGuard = 0;
+      while (targetQueue.length > 0 && colIdx < cols && localGuard++ < 20000) {
+        const col = targetPage.columns[colIdx];
+        const block = targetQueue.shift();
+        col.el.insertBefore(block, col.sentinel);
 
-    // 結束當頁：先執行孤兒標題保護，再開新頁
-    const finalizePage = () => {
-      while (page.blocks.length > 1 && isHeadingLike(page.blocks[page.blocks.length - 1])) {
-        const orphan = page.blocks.pop();
-        page.content.removeChild(orphan);
-        queue.unshift(orphan);
-      }
-      pages.push(page);
-      page = createPageShell();
-    };
-
-    let guard = 0;
-    while (queue.length > 0 && guard++ < 50000) {
-      const block = queue.shift();
-      page.content.insertBefore(block, page.sentinel);
-
-      if (!isOverflowing(page)) {
-        page.blocks.push(block);
-        continue;
-      }
-
-      // 溢出：先移除，再嘗試細粒度切分
-      page.content.removeChild(block);
-      const split = trySplit(page, block);
-      if (split) {
-        page.blocks.push(split.head);
-        if (split.tail) {
-          queue.unshift(split.tail);
-          finalizePage();
+        if (!isColOverflowing(targetPage, col)) {
+          col.blocks.push(block);
+          continue;
         }
-        continue;
+
+        // 溢出：先移除，再嘗試細粒度切分
+        col.el.removeChild(block);
+        const split = trySplit(targetPage, col, block);
+        if (split) {
+          col.blocks.push(split.head);
+          if (split.tail) {
+            targetQueue.unshift(split.tail);
+            // 結束本欄前先執行孤兒標題保護
+            while (col.blocks.length > 1 && isHeadingLike(col.blocks[col.blocks.length - 1])) {
+              const orphan = col.blocks.pop();
+              col.el.removeChild(orphan);
+              targetQueue.unshift(orphan);
+            }
+            colIdx++;
+          }
+          continue;
+        }
+
+        if (col.blocks.length === 0) {
+          if (!allowForceInEmptyCol) {
+            targetQueue.unshift(block);
+            return false;
+          }
+          // 單一不可切分區塊即超過整欄容量：強制放置，避免無限迴圈
+          col.el.insertBefore(block, col.sentinel);
+          col.blocks.push(block);
+          colIdx++;
+          continue;
+        }
+
+        targetQueue.unshift(block);
+        while (col.blocks.length > 1 && isHeadingLike(col.blocks[col.blocks.length - 1])) {
+          const orphan = col.blocks.pop();
+          col.el.removeChild(orphan);
+          targetQueue.unshift(orphan);
+        }
+        colIdx++;
       }
-
-      if (page.blocks.length === 0) {
-        // 單一不可切分區塊即超過整頁容量：強制放置，避免無限迴圈
-        page.content.insertBefore(block, page.sentinel);
-        page.blocks.push(block);
-        finalizePage();
-        continue;
-      }
-
-      queue.unshift(block);
-      finalizePage();
-    }
-
-    if (page.blocks.length > 0) {
-      pages.push(page);
-    } else if (page.sheet.parentNode) {
-      page.sheet.parentNode.removeChild(page.sheet);
-    }
+      return targetQueue.length === 0;
+    };
 
     const createMemoBox = () => {
       const memoBox = document.createElement('div');
@@ -1493,49 +1535,80 @@ ${slidesContent}`;
       return memoBox;
     };
 
-    // 末頁模式實測決策：手寫備忘區 → 平衡欄 → 滿版 (保證不裁切)
-    const lastPage = pages[pages.length - 1];
-    if (lastPage) {
-      let settled = false;
-      if (enableMemoGrid) {
-        lastPage.content.className = buildContentClass('has-memo');
-        const memoBox = createMemoBox();
-        lastPage.sheet.appendChild(memoBox);
-        if (!isOverflowing(lastPage)) {
-          settled = true;
+    let resultWrappers = [];
+    try {
+      const pages = [];
+      let guard = 0;
+      while (queue.length > 0 && guard++ < 500) {
+        const page = createPageShell();
+        fillSinglePage(page, queue, true);
+        if (page.columns.some(c => c.blocks.length > 0)) {
+          pages.push(page);
         } else {
-          lastPage.sheet.removeChild(memoBox);
+          if (page.sheet.parentNode) page.sheet.parentNode.removeChild(page.sheet);
+          break;
         }
       }
-      if (!settled) {
-        lastPage.content.className = buildContentClass('full-page');
-        if (isOverflowing(lastPage)) {
-          lastPage.content.className = buildContentClass('full-page is-full-sheet');
+
+      // 末頁模式實測決策：若剩餘空間可容納手寫備忘區則重排附加，否則維持滿頁呈現 (保證不裁切)
+      const lastPage = pages[pages.length - 1];
+      if (lastPage) {
+        let settled = false;
+        if (enableMemoGrid) {
+          const memoTestPage = createPageShell();
+          const memoBox = createMemoBox();
+          // 量測期間暫鎖定最小備忘區高度，讓 content 取得精確剩餘空間上限
+          memoBox.style.flex = '0 0 42mm';
+          memoTestPage.sheet.appendChild(memoBox);
+
+          const clonedBlocks = lastPage.columns.flatMap(c => c.blocks.map(b => b.cloneNode(true)));
+          const allFit = fillSinglePage(memoTestPage, clonedBlocks, false);
+
+          if (allFit) {
+            memoBox.style.flex = '';
+            memoTestPage.content.className = buildContentClass('has-memo');
+            if (!isPageOverflowing(memoTestPage) && memoTestPage.sheet.scrollHeight <= memoTestPage.sheet.clientHeight + 1) {
+              if (lastPage.sheet.parentNode) lastPage.sheet.parentNode.removeChild(lastPage.sheet);
+              pages[pages.length - 1] = memoTestPage;
+              settled = true;
+            }
+          }
+          if (!settled && memoTestPage.sheet.parentNode) {
+            memoTestPage.sheet.parentNode.removeChild(memoTestPage.sheet);
+          }
+        }
+        if (!settled) {
+          lastPage.content.className = buildContentClass('full-page');
+          if (isPageOverflowing(lastPage)) {
+            lastPage.content.className = buildContentClass('full-page is-full-sheet');
+          }
         }
       }
+
+      const totalPages = pages.length;
+      resultWrappers = pages.map((pg, pIdx) => {
+        const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
+        const titleEl = pg.header.querySelector('.appendix-notes-title');
+        if (titleEl) titleEl.textContent = `TE-NOTER 外部 AI 重點精華筆記${pageLabel}`;
+
+        // 移除量測用哨兵並自沙盒卸載
+        pg.columns.forEach(c => {
+          if (c.sentinel.parentNode) c.sentinel.parentNode.removeChild(c.sentinel);
+        });
+        if (pg.sheet.parentNode) pg.sheet.parentNode.removeChild(pg.sheet);
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'print-page-wrapper';
+        const indicator = document.createElement('div');
+        indicator.className = 'page-indicator-badge no-print';
+        indicator.textContent = `A4 自訂筆記附錄${pageLabel}`;
+        wrapper.appendChild(indicator);
+        wrapper.appendChild(pg.sheet);
+        return wrapper;
+      });
+    } finally {
+      if (sandbox.parentNode) sandbox.parentNode.removeChild(sandbox);
     }
-
-    const totalPages = pages.length;
-    const resultWrappers = pages.map((pg, pIdx) => {
-      const pageLabel = totalPages > 1 ? ` (${pIdx + 1}/${totalPages})` : '';
-      const titleEl = pg.header.querySelector('.appendix-notes-title');
-      if (titleEl) titleEl.textContent = `TE-NOTER 外部 AI 重點精華筆記${pageLabel}`;
-
-      // 移除量測用哨兵並自沙盒卸載
-      if (pg.sentinel.parentNode) pg.sentinel.parentNode.removeChild(pg.sentinel);
-      if (pg.sheet.parentNode) pg.sheet.parentNode.removeChild(pg.sheet);
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'print-page-wrapper';
-      const indicator = document.createElement('div');
-      indicator.className = 'page-indicator-badge no-print';
-      indicator.textContent = `A4 自訂筆記附錄${pageLabel}`;
-      wrapper.appendChild(indicator);
-      wrapper.appendChild(pg.sheet);
-      return wrapper;
-    });
-
-    if (sandbox.parentNode) sandbox.parentNode.removeChild(sandbox);
 
     return resultWrappers;
   }
